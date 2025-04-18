@@ -6,10 +6,10 @@ HEIGHT = 1080
 
 
 class Boid:
-    heading = 0
-    velocity = None
     center_x = 0
     center_y = 0
+    xvelocity = 0
+    yvelocity = 0
 
     center_points = []
 
@@ -23,128 +23,184 @@ class Boid:
 
         self.path_pts = [(self.center_x, self.center_y)]
 
-        self.heading = random.randint(0, 359)
         self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        self.velocity = 5 # random.randint(0, 15)
+
+        self.xvelocity = 5#random.randint(3, 10) # 5
+        self.yvelocity = 5#random.randint(3, 10) # 5
         self.size = 7
 
         # 'radius' of sensitivty circle
         self.sense_radius = 100
 
-    def new_heading(self, neg, distance):
-        print(distance)
-        distance_ratio = distance / 25
-        # print(distance_ratio)
-        sensitivity_mag = pow(1.2, -7*distance_ratio)
-        # print(f"sensitivy_mag={sensitivity_mag} & distance_ratio={distance_ratio} & distance={distance}")
 
-        angle_delta = 90
+    # # # # # # # # # # # # # # # # # # # # 
+    # COLLISION AVOIDANCE
+    # # # # # # # # # # # # # # # # # # # # 
 
-        if neg:
-            angle_delta = -angle_delta
-        else:
-            pass
-
-        angle_delta = angle_delta * sensitivity_mag
-
-        heading_angle_delta = self.heading + angle_delta
-        header_modulo = heading_angle_delta % 360
-
-        # print(f"heading is {heading_angle_delta} * sens_mag of {sensitivity_mag}")
-
-        if heading_angle_delta > 360:
-            # print(f"heading_angle_delta > 360 {heading_angle_delta % 360}")
-            return header_modulo
-        elif heading_angle_delta < 0:
-            # remainder_angle = heading_angle_delta % 360
-            # print(f"heading_angle_delta < 0 {(heading_angle_delta % 360) + remainder_angle}")
-            # print(f">>> {heading_angle_delta} + {header_modulo} = {heading_angle_delta + header_modulo}")
-            return (heading_angle_delta + header_modulo)
-        else:
-            # print(f"heading_angle_delta {heading_angle_delta}")
-            return heading_angle_delta
-        
     def avoid_walls(self):
 
-        if self.heading % 90 == 0:
-            print("self.heading is multiple of 90 so adding 1")
-            self.heading += 1
-
-        # NOTE: ROTATION IS COUNTER-CLOCKWISE
-
-        wall_distance = 50
+        wall_distance = 100
+        turn_factor = 0.5
 
         # left wall
         if self.center_x - wall_distance < 0:
-            # print("1")
-            distance = self.center_x
-            if self.heading < 270 and self.heading > 180:
-                self.heading = self.new_heading(neg=False, distance=distance)
-            elif self.heading < 180 and self.heading > 90:
-                self.heading = self.new_heading(neg=True, distance=distance)
-            else:
-                # print("1x")
-                return False
+            # rotated 'up' or flat
+            self.xvelocity += turn_factor
 
         # right wall
         if self.center_x + wall_distance >= WIDTH:
-            # print("2")
-            distance = (WIDTH - self.center_x)
-            if self.heading < 360 and self.heading > 270:
-                self.heading = self.new_heading(neg=True, distance=distance)
-            elif self.heading < 90 and self.heading > 0:
-                self.heading = self.new_heading(neg=False, distance=distance)
-            else:
-                # print("2x")
-                return False
+            self.xvelocity -= turn_factor
 
         # top
         if self.center_y + wall_distance >= HEIGHT:
-            # print("3")
-            distance = (HEIGHT - self.center_y)
-            if self.heading < 90 and self.heading > 0:
-                self.heading = self.new_heading(neg=True, distance=distance)
-            elif self.heading < 180 and self.heading > 90:
-                self.heading = self.new_heading(neg=False, distance=distance)
-            else:
-                # print("3x")
-                return False
+            self.yvelocity -= turn_factor
 
         # bottom
         if self.center_y - wall_distance < 0:
-            # print("4")
-            distance = self.center_y
-            if self.heading > 270 and self.heading < 360:
-                self.heading = self.new_heading(neg=False, distance=distance)
-            elif self.heading < 270 and self.heading > 180:
-                self.heading = self.new_heading(neg=True, distance=distance)
-            else:
-                # print("4x")
-                return False
+            self.yvelocity += turn_factor
 
         return True
     
     def collision_avoidance(self, neighborhood):
-        # get nearby boids
-        print(neighborhood)
+        bump_dist = 20
+        avoid_force_x = 0
+        avoid_force_y = 0
+
+        for neighbor in neighborhood:
+            diff_x = neighbor.center_x - self.center_x
+            diff_y = neighbor.center_y - self.center_y
+
+            if abs(diff_x) < bump_dist and abs(diff_y) < bump_dist:
+                # Generate a force pushing AWAY from the neighbor
+                avoid_force_x -= diff_x  # Subtract the difference to move in the opposite direction
+                avoid_force_y -= diff_y
+
+        self.xvelocity += avoid_force_x * 0.05
+        self.yvelocity += avoid_force_y * 0.05
+
+
+        # wall avoidance
+        self.avoid_walls()
     
+    # # # # # # # # # # # # # # # # # # # # 
+    # FLOCK CENTERING
+    # # # # # # # # # # # # # # # # # # # # 
+
+    def stay_centered(self, num_neighbhors, neighbhors_x_sum, neighbhors_y_sum):
+        # find average 'center' of flock
+
+        if num_neighbhors != 0:
+            center_flock_x = neighbhors_x_sum / num_neighbhors
+            center_flock_y = neighbhors_y_sum / num_neighbhors
+
+            diff_x = center_flock_x - self.center_x
+            diff_y = center_flock_y - self.center_y
+            # print(f"curr_heading_relative={center_heading_relative} boid_heading={self.heading}")
+            # print(f"diff_x {diff_x} diff_y {diff_y}")
+            self.center_points.append( (center_flock_x, center_flock_y) )
+
+            # if diff_x > 0:
+            #     self.xvelocity += diff_x/(self.sense_radius*5)
+            # else:
+            #     self.xvelocity -= diff_x/(self.sense_radius*5)
+
+            # if diff_y > 0:
+            #     self.yvelocity += diff_y/(self.sense_radius*5)
+            # else:
+            #     self.yvelocity -= diff_y/(self.sense_radius*5)
+
+            self.xvelocity += diff_x/(self.sense_radius*5)
+            self.yvelocity += diff_y/(self.sense_radius*5)
+
+    # # # # # # # # # # # # # # # # # # # # 
+    # MATCH VELOCITY
+    # # # # # # # # # # # # # # # # # # # # 
+
+    def match_velocity(self, num_neighbors, xvelocity_sum, yvelocity_sum):
+
+        # need to average and match
+
+        if num_neighbors != 0:
+
+            avg_xvelocity = xvelocity_sum / num_neighbors
+            avg_yvelocity = yvelocity_sum / num_neighbors
+            self.xvelocity += (avg_xvelocity - self.xvelocity)*0.2
+            self.yvelocity += (avg_yvelocity - self.yvelocity)*0.2
+
+            # if avg_xvelocity > self.xvelocity:
+            #     self.xvelocity += 0.1
+            # elif avg_xvelocity < self.xvelocity:
+            #     self.xvelocity -= 0.1
+
+            # if avg_yvelocity > self.yvelocity:
+            #     self.yvelocity += 0.1
+            # elif avg_yvelocity < self.yvelocity:
+            #     self.yvelocity -= 0.1
+
+    # # # # # # # # # # # # # # # # # # # # 
+    # GET NEIGHBHORS
+    # # # # # # # # # # # # # # # # # # # # 
+
+    def get_neighbhors(self, boids):
+        neighbhors = []
+        for b in boids:
+            if b.boid_id != self.boid_id:
+                euclid_distance = math.sqrt( (self.center_x - b.center_x)**2 + (self.center_y - b.center_y)**2 )
+                # print(f"euclid_dist={euclid_distance} id={self.color}")
+                if euclid_distance < self.sense_radius:
+                    neighbhors.append( (b) )
+        return neighbhors
+
+    # # # # # # # # # # # # # # # # # # # # 
+    # PILOT
+    # # # # # # # # # # # # # # # # # # # # 
+
     def pilot(self, boids):
         # flight/pilot module are combined
 
         # COMBINE ACCELERATION REQUESTS HERE
+        neighbhors = self.get_neighbhors(boids=boids)
+
+        # accumulation vals
+        num_neighbhors = len(neighbhors)
+
+        neighbhors_x_sum = 0
+        neighbhors_y_sum = 0
+
+        xvelocity_sum = 0
+        yvelocity_sum = 0
+
+        for neighbor in neighbhors:
+            neighbhors_x_sum += neighbor.center_x
+            neighbhors_y_sum += neighbor.center_y
+            xvelocity_sum += neighbor.xvelocity
+            yvelocity_sum += neighbor.yvelocity
+
 
         # NOTE: PRECENDENCE LEVELS
         # flock centering
-        # self.stay_centered(boids)
+        self.stay_centered(num_neighbhors=num_neighbhors, neighbhors_x_sum=neighbhors_x_sum, neighbhors_y_sum=neighbhors_y_sum)
         # velocity matching
+        self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
         # collision avoidance
-        self.avoid_walls()
-        # self.pacman_walls()
 
-        rad = math.radians(self.heading)
-        
-        self.center_x += self.velocity * math.cos(rad)
-        self.center_y += self.velocity * math.sin(rad)
+        speed = math.sqrt(self.xvelocity**2 + self.yvelocity**2)
+
+        max_speed = 10 # velocity of 10
+        min_speed = 3
+        if speed > max_speed:
+            self.xvelocity = (self.xvelocity/speed) * max_speed
+            self.yvelocity = (self.yvelocity/speed) * max_speed
+        elif speed < min_speed:
+            self.xvelocity = (self.xvelocity/speed) * min_speed
+            self.yvelocity = (self.yvelocity/speed) * min_speed
+
+
+        self.collision_avoidance(neighborhood=neighbhors)
+
+        self.center_x += self.xvelocity
+        self.center_y += self.yvelocity
+        # print(f"curr x_velocity {self.xvelocity} y_velocity {self.yvelocity}")
 
         self.path_pts.append((self.center_x, self.center_y))
 
@@ -161,7 +217,7 @@ class Boid:
         # Rotate points
         rotated_points = []
         for px, py in points:
-            rad = math.radians(self.heading)
+            rad = math.atan2(self.yvelocity, self.xvelocity)
             rx = px * math.cos(rad) - py * math.sin(rad)
             ry = px * math.sin(rad) + py * math.cos(rad)
             rotated_points.append((self.center_x + rx, self.center_y + ry))
@@ -172,45 +228,3 @@ class Boid:
         # print(self.heading)
 
         return rotated_points, self.center_x, self.center_y, self.sense_radius, self.color, path_to_draw
-    
-    def get_neighbhors(self, boids):
-        neighbhors = []
-        neighbhors_x_sum = 0
-        neighbhors_y_sum = 0
-        for b in boids:
-            euclid_distance = math.sqrt( (self.center_x - b.center_x)**2 + (self.center_y - b.center_y)**2 )
-            # print(f"euclid_dist={euclid_distance} id={self.color}")
-            if euclid_distance < self.sense_radius:
-                neighbhors.append( (b) )
-                neighbhors_x_sum += b.center_x
-                neighbhors_y_sum += b.center_y
-
-        return neighbhors, neighbhors_x_sum, neighbhors_y_sum
-
-    def stay_centered(self, boids):
-        #
-        # print("tries to find 'center'")
-
-        # find average 'center' of flock
-        neighbhors, neighbhors_x_sum, neighbhors_y_sum = self.get_neighbhors(boids=boids)
-        num_neighbhors = len(neighbhors)
-
-        center_flock_x = neighbhors_x_sum / num_neighbhors
-        center_flock_y = neighbhors_y_sum / num_neighbhors
-
-        diff_x = self.center_x - center_flock_x
-        diff_y = self.center_y - center_flock_y
-        center_heading_relative = math.degrees(math.atan2(diff_y, diff_x))
-
-        # print(f"num of neighbhors={num_neighbhors} with center at ({center_flock_x}, {center_flock_y}) and curr boid center at ({self.center_x}, {self.center_y})")
-        # print(f"curr_heading_relative={center_heading_relative}")
-        if center_heading_relative == 0:
-            # no neighbhors so
-            pass
-        else:
-            print(f"curr_heading_relative={center_heading_relative} boid_heading={self.heading}")
-            self.center_points.append( (center_flock_x, center_flock_y) )
-            if self.heading > center_heading_relative:
-                self.heading += 2
-            else:
-                self.heading -= 2

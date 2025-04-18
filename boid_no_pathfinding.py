@@ -29,11 +29,11 @@ def update_surface():
 
         rotated_points, center_x, center_y, sense_radius, color, path_to_draw = boid.get_boid()
 
-        for pt in boid.center_points:
-            pygame.draw.circle(surface, (255, 0, 0), pt, 5)
+        # for pt in boid.center_points:
+        #     pygame.draw.circle(surface, (255, 0, 0), pt, 5)
 
-        pygame.draw.circle(surface, (0, 0, 255), (center_x, center_y), sense_radius)
-        pygame.draw.circle(surface, (30, 30, 30), (center_x, center_y), sense_radius-1)
+        # pygame.draw.circle(surface, (0, 0, 255), (center_x, center_y), sense_radius)
+        # pygame.draw.circle(surface, (30, 30, 30), (center_x, center_y), sense_radius-1)
         pygame.draw.lines(surface=surface, color=color, closed=False, points=list(reversed(path_to_draw)))
         pygame.draw.polygon(surface, (255, 255, 0), rotated_points)
 
@@ -42,6 +42,9 @@ def update_surface():
     return surface, new_boids
 
 curr_id = 0
+
+boids.append(Boid(100, 100, 1))
+boids.append(Boid(150, 100, 2))
 
 # Game loop
 running = True
@@ -54,8 +57,11 @@ while running:
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             x, y = pygame.mouse.get_pos()
+            x = x*(ACTUAL_WIDTH/WIDTH)
+            y = y*(ACTUAL_HEIGHT/HEIGHT)
             if x < WIDTH - 20 and x > 20 and y < HEIGHT - 20 and y > 0:
-                boids.append(Boid(x, y, curr_id))
+                # boids.append(Boid(x, y, curr_id))
+                boids.append(Boid(60*(curr_id+1), 10*(curr_id+3), boid_id=curr_id))
                 curr_id += 1
 
     surface, new_boids = update_surface()
