@@ -4,6 +4,13 @@ import math
 WIDTH = 1920
 HEIGHT = 1080
 
+"""
+This program is based off of Craig Reynold's paper
+"Flocks, herds and schools: A distributed behavioral model"
+
+I'd like to thank the nice ECE department at Cornell for simplifying scary vector math
+https://people.ece.cornell.edu/land/courses/ece4760/labs/s2021/Boids/Boids.html#:~:text=Boids%20is%20an%20artificial%20life,very%20simple%20set%20of%20rules.
+"""
 
 class Boid:
     center_x = 0
@@ -16,7 +23,7 @@ class Boid:
     # Per the paper,
     #   random heading
     #   random velocity
-    def __init__(self, init_x, init_y, boid_id):
+    def __init__(self, init_x, init_y, boid_id, wall_coords):
         self.center_x = init_x
         self.center_y = init_y
         self.boid_id = boid_id
@@ -25,12 +32,14 @@ class Boid:
 
         self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-        self.xvelocity = 5#random.randint(3, 10) # 5
-        self.yvelocity = 5#random.randint(3, 10) # 5
+        self.xvelocity = 2#5#random.randint(3, 10) # 5
+        self.yvelocity = 2#5#random.randint(3, 10) # 5
         self.size = 7
 
         # 'radius' of sensitivty circle
         self.sense_radius = 100
+
+        self.wall_coords = wall_coords
 
 
     # # # # # # # # # # # # # # # # # # # # 
@@ -38,6 +47,31 @@ class Boid:
     # # # # # # # # # # # # # # # # # # # # 
 
     def avoid_walls(self):
+
+        wall_distance = 50
+        turn_factor = 0.5
+
+        for top_left, bottom_right in self.wall_coords:
+            # left wall
+            if self.center_x - wall_distance < 0:
+                # rotated 'up' or flat
+                self.xvelocity += turn_factor
+
+            # right wall
+            if self.center_x + wall_distance >= WIDTH:
+                self.xvelocity -= turn_factor
+
+            # top
+            if self.center_y + wall_distance >= HEIGHT:
+                self.yvelocity -= turn_factor
+
+            # bottom
+            if self.center_y - wall_distance < 0:
+                self.yvelocity += turn_factor
+
+        return True
+    
+    def avoid_borders(self):
 
         wall_distance = 100
         turn_factor = 0.5
@@ -62,25 +96,29 @@ class Boid:
         return True
     
     def collision_avoidance(self, neighborhood):
-        bump_dist = 20
+        bump_dist = 20 ** 2
         avoid_force_x = 0
         avoid_force_y = 0
 
         for neighbor in neighborhood:
-            diff_x = neighbor.center_x - self.center_x
-            diff_y = neighbor.center_y - self.center_y
+            diff_x = self.center_x - neighbor.center_x
+            diff_y = self.center_y - neighbor.center_y
+            
+            squared_distance = diff_x**2 + diff_y**2
 
-            if abs(diff_x) < bump_dist and abs(diff_y) < bump_dist:
+            if squared_distance < bump_dist:
                 # Generate a force pushing AWAY from the neighbor
-                avoid_force_x -= diff_x  # Subtract the difference to move in the opposite direction
-                avoid_force_y -= diff_y
+                avoid_force_x += diff_x  # Subtract the difference to move in the opposite direction
+                avoid_force_y += diff_y
 
-        self.xvelocity += avoid_force_x * 0.05
-        self.yvelocity += avoid_force_y * 0.05
+        self.xvelocity += avoid_force_x * 0.02
+        self.yvelocity += avoid_force_y * 0.02
 
 
         # wall avoidance
-        self.avoid_walls()
+        # self.avoid_walls()
+
+        self.avoid_borders()
     
     # # # # # # # # # # # # # # # # # # # # 
     # FLOCK CENTERING
@@ -99,18 +137,9 @@ class Boid:
             # print(f"diff_x {diff_x} diff_y {diff_y}")
             self.center_points.append( (center_flock_x, center_flock_y) )
 
-            # if diff_x > 0:
-            #     self.xvelocity += diff_x/(self.sense_radius*5)
-            # else:
-            #     self.xvelocity -= diff_x/(self.sense_radius*5)
-
-            # if diff_y > 0:
-            #     self.yvelocity += diff_y/(self.sense_radius*5)
-            # else:
-            #     self.yvelocity -= diff_y/(self.sense_radius*5)
-
-            self.xvelocity += diff_x/(self.sense_radius*5)
-            self.yvelocity += diff_y/(self.sense_radius*5)
+            return diff_x, diff_y
+        
+        return 0, 0
 
     # # # # # # # # # # # # # # # # # # # # 
     # MATCH VELOCITY
@@ -118,24 +147,23 @@ class Boid:
 
     def match_velocity(self, num_neighbors, xvelocity_sum, yvelocity_sum):
 
-        # need to average and match
-
         if num_neighbors != 0:
 
             avg_xvelocity = xvelocity_sum / num_neighbors
             avg_yvelocity = yvelocity_sum / num_neighbors
-            self.xvelocity += (avg_xvelocity - self.xvelocity)*0.2
-            self.yvelocity += (avg_yvelocity - self.yvelocity)*0.2
+            return (avg_xvelocity - self.xvelocity), (avg_yvelocity - self.yvelocity)
+        
+        return 0, 0
 
-            # if avg_xvelocity > self.xvelocity:
-            #     self.xvelocity += 0.1
-            # elif avg_xvelocity < self.xvelocity:
-            #     self.xvelocity -= 0.1
+    # # # # # # # # # # # # # # # # # # # # 
+    # FOLLOW MOUSE
+    # # # # # # # # # # # # # # # # # # # # 
 
-            # if avg_yvelocity > self.yvelocity:
-            #     self.yvelocity += 0.1
-            # elif avg_yvelocity < self.yvelocity:
-            #     self.yvelocity -= 0.1
+    def follow_mouse(self, mouse_xy):
+        diff_x = (mouse_xy[0] - self.center_x) / self.center_x
+        diff_y = (mouse_xy[1] - self.center_y) / self.center_y
+        return diff_x, diff_y
+
 
     # # # # # # # # # # # # # # # # # # # # 
     # GET NEIGHBHORS
@@ -155,7 +183,7 @@ class Boid:
     # PILOT
     # # # # # # # # # # # # # # # # # # # # 
 
-    def pilot(self, boids):
+    def pilot(self, boids, mouse_xy):
         # flight/pilot module are combined
 
         # COMBINE ACCELERATION REQUESTS HERE
@@ -176,18 +204,30 @@ class Boid:
             xvelocity_sum += neighbor.xvelocity
             yvelocity_sum += neighbor.yvelocity
 
-
         # NOTE: PRECENDENCE LEVELS
+        mouse_scalar = 0.05
+        mouse_diff_x, mouse_diff_y = self.follow_mouse(mouse_xy)
+
         # flock centering
-        self.stay_centered(num_neighbhors=num_neighbhors, neighbhors_x_sum=neighbhors_x_sum, neighbhors_y_sum=neighbhors_y_sum)
+        centering_scalar = 0.0005
+        diff_x1, diff_y1 = self.stay_centered(num_neighbhors=num_neighbhors, neighbhors_x_sum=neighbhors_x_sum, neighbhors_y_sum=neighbhors_y_sum)
+
         # velocity matching
-        self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
+        match_v_scalar = 0.2
+        diff_vx, diff_vy = self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
+
+        xvelocity_delta = mouse_scalar*mouse_diff_x + centering_scalar*diff_x1 + match_v_scalar*diff_vx
+        yvelocity_delta = mouse_scalar*mouse_diff_y + centering_scalar*diff_y1 + match_v_scalar*diff_vy
+
+        self.xvelocity += xvelocity_delta
+        self.yvelocity += yvelocity_delta
+
         # collision avoidance
 
         speed = math.sqrt(self.xvelocity**2 + self.yvelocity**2)
 
-        max_speed = 10 # velocity of 10
-        min_speed = 3
+        max_speed = 3 # velocity of 10
+        min_speed = 2
         if speed > max_speed:
             self.xvelocity = (self.xvelocity/speed) * max_speed
             self.yvelocity = (self.yvelocity/speed) * max_speed
