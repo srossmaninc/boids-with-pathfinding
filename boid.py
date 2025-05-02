@@ -4,7 +4,7 @@ import math
 WIDTH = 1920
 HEIGHT = 1080
 
-MAX_SPEED = 3
+MAX_SPEED = 5
 MIN_SPEED = 2
 
 """
@@ -51,7 +51,7 @@ class Boid:
 
     def avoid_walls(self):
 
-        wall_distance = 50
+        wall_distance = 100 #50
         turn_factor = 0.5
 
         for top_left, bottom_right in self.wall_coords:
@@ -107,25 +107,23 @@ class Boid:
             diff_x = self.center_x - neighbor.center_x
             diff_y = self.center_y - neighbor.center_y
 
-            if abs(diff_x) < bump_dist and abs(diff_y) < bump_dist:
+            squared_dist = diff_x**2 + diff_y**2
 
-                squared_dist = diff_x**2 + diff_y**2
-
-                if squared_dist < bump_dist**2:
-                    # print("hit!")
-                    # Generate a force pushing AWAY from the neighbor
-                    avoid_force_x += diff_x / squared_dist  # Subtract the difference to move in the opposite direction
-                    avoid_force_y += diff_y / squared_dist
+            if squared_dist < bump_dist**2:
+                # print("hit!")
+                # Generate a force pushing AWAY from the neighbor
+                avoid_force_x += diff_x / squared_dist  # Subtract the difference to move in the opposite direction
+                avoid_force_y += diff_y / squared_dist
 
         curr_speed = math.sqrt( self.xvelocity ** 2 + self.yvelocity ** 2)
-        self.xvelocity += avoid_force_x * curr_speed
-        self.yvelocity += avoid_force_y * curr_speed
+        self.xvelocity += avoid_force_x *2#* curr_speed
+        self.yvelocity += avoid_force_y *2#* curr_speed
 
 
         # wall avoidance
         # self.avoid_walls()
 
-        self.avoid_borders()
+        # self.avoid_borders()
     
     # # # # # # # # # # # # # # # # # # # # 
     # FLOCK CENTERING
@@ -133,43 +131,53 @@ class Boid:
 
     def stay_centered(self, num_neighbhors, neighbhors_x_sum, neighbhors_y_sum):
         # find average 'center' of flock
+        center_flock_x = neighbhors_x_sum / num_neighbhors
+        center_flock_y = neighbhors_y_sum / num_neighbhors
 
-        if num_neighbhors != 0:
-            center_flock_x = neighbhors_x_sum / num_neighbhors
-            center_flock_y = neighbhors_y_sum / num_neighbhors
+        diff_x = center_flock_x - self.center_x
+        diff_y = center_flock_y - self.center_y
+        # print(f"curr_heading_relative={center_heading_relative} boid_heading={self.heading}")
+        # print(f"diff_x {diff_x} diff_y {diff_y}")
+        self.center_points.append( (center_flock_x, center_flock_y) )
 
-            diff_x = center_flock_x - self.center_x
-            diff_y = center_flock_y - self.center_y
-            # print(f"curr_heading_relative={center_heading_relative} boid_heading={self.heading}")
-            # print(f"diff_x {diff_x} diff_y {diff_y}")
-            self.center_points.append( (center_flock_x, center_flock_y) )
-
-            return diff_x, diff_y
-        
-        return 0, 0
+        return diff_x, diff_y
 
     # # # # # # # # # # # # # # # # # # # # 
     # MATCH VELOCITY
     # # # # # # # # # # # # # # # # # # # # 
 
     def match_velocity(self, num_neighbors, xvelocity_sum, yvelocity_sum):
-
-        if num_neighbors != 0:
-
-            avg_xvelocity = xvelocity_sum / num_neighbors
-            avg_yvelocity = yvelocity_sum / num_neighbors
-            return (avg_xvelocity - self.xvelocity), (avg_yvelocity - self.yvelocity)
-        
-        return 0, 0
+        avg_xvelocity = xvelocity_sum / num_neighbors
+        avg_yvelocity = yvelocity_sum / num_neighbors
+        return (avg_xvelocity - self.xvelocity), (avg_yvelocity - self.yvelocity)
 
     # # # # # # # # # # # # # # # # # # # # 
     # FOLLOW MOUSE
     # # # # # # # # # # # # # # # # # # # # 
 
     def follow_mouse(self, mouse_xy):
-        diff_x = (mouse_xy[0] - self.center_x) / self.center_x
-        diff_y = (mouse_xy[1] - self.center_y) / self.center_y
-        return diff_x, diff_y
+        # mouse_diff_x = (mouse_xy[0] - self.center_x) / self.center_x
+        # mouse_diff_y = (mouse_xy[1] - self.center_y) / self.center_y
+        mouse_scalar = 0.05  # Adjust this value
+
+        mouse_diff_x = mouse_xy[0] - self.center_x
+        mouse_diff_y = mouse_xy[1] - self.center_y
+
+        distance_to_mouse_sq = mouse_diff_x**2 + mouse_diff_y**2
+
+        if distance_to_mouse_sq > 0:  # Avoid division by zero if mouse is at the boid's center
+            distance_to_mouse = distance_to_mouse_sq**0.5
+            direction_x = mouse_diff_x / distance_to_mouse
+            direction_y = mouse_diff_y / distance_to_mouse
+
+            xvelocity_delta = mouse_scalar * direction_x
+            yvelocity_delta = mouse_scalar * direction_y
+
+            # print(f"mouse_diff_x {xvelocity_delta} mouse_diff_y {yvelocity_delta}")
+
+            self.xvelocity += xvelocity_delta
+            self.yvelocity += yvelocity_delta
+        return mouse_diff_x, mouse_diff_y
 
 
     # # # # # # # # # # # # # # # # # # # # 
@@ -211,32 +219,38 @@ class Boid:
             yvelocity_sum += neighbor.yvelocity
 
         # NOTE: PRECENDENCE LEVELS
-        mouse_scalar = 0.01
+        mouse_scalar = 1
         # mouse_diff_x, mouse_diff_y = self.follow_mouse(mouse_xy)
-        mouse_diff_x, mouse_diff_y = 0, 0
+        # mouse_diff_x, mouse_diff_y = 0, 0
 
-        # flock centering
-        centering_scalar = 0.0002
-        diff_x1, diff_y1 = self.stay_centered(num_neighbhors=num_neighbhors, neighbhors_x_sum=neighbhors_x_sum, neighbhors_y_sum=neighbhors_y_sum)
+        # self.xvelocity += mouse_scalar*mouse_diff_x
+        # self.yvelocity += mouse_scalar*mouse_diff_y
 
-        # velocity matching
-        match_v_scalar = 0.2
-        diff_vx, diff_vy = self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
 
-        # # with mouse
-        # xvelocity_delta = mouse_scalar*mouse_diff_x + centering_scalar*diff_x1 + match_v_scalar*diff_vx
-        # yvelocity_delta = mouse_scalar*mouse_diff_y + centering_scalar*diff_y1 + match_v_scalar*diff_vy
-        # without
-        # xvelocity_delta = centering_scalar*diff_x1 + match_v_scalar*diff_vx
-        # yvelocity_delta = centering_scalar*diff_y1 + match_v_scalar*diff_vy
+        if num_neighbhors > 0:
+            # self.xvelocity *= mouse_diff_x
+            # self.xvelocity *= mouse_diff_y
 
-        self.xvelocity += centering_scalar*diff_x1
-        self.yvelocity += centering_scalar*diff_y1
-        self.xvelocity += match_v_scalar*diff_vx
-        self.yvelocity += match_v_scalar*diff_vy
+            self.collision_avoidance(neighborhood=neighbhors)
 
-        # self.xvelocity += xvelocity_delta
-        # self.yvelocity += yvelocity_delta
+            # flock centering
+            centering_scalar = 0.0002
+            diff_x1, diff_y1 = self.stay_centered(num_neighbhors=num_neighbhors, neighbhors_x_sum=neighbhors_x_sum, neighbhors_y_sum=neighbhors_y_sum)
+
+            # velocity matching
+            match_v_scalar = 0.2
+            diff_vx, diff_vy = self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
+
+            # # with mouse
+            # self.xvelocity += mouse_scalar*mouse_diff_x + centering_scalar*diff_x1 + match_v_scalar*diff_vx
+            # self.yvelocity += mouse_scalar*mouse_diff_y + centering_scalar*diff_y1 + match_v_scalar*diff_vy
+            # without
+            self.xvelocity += centering_scalar*diff_x1 + match_v_scalar*diff_vx
+            self.yvelocity += centering_scalar*diff_y1 + match_v_scalar*diff_vy
+
+            # print(f"diff_x1 {diff_x1} diff_y1 {diff_y1}")
+            # print(f"diff vx {diff_vx} diff_vy {diff_vy}")
+            # print("------------")
 
         # collision avoidance
 
@@ -251,7 +265,7 @@ class Boid:
             self.xvelocity = (self.xvelocity/speed) * MIN_SPEED
             self.yvelocity = (self.yvelocity/speed) * MIN_SPEED
 
-        self.collision_avoidance(neighborhood=neighbhors)
+        self.avoid_borders()
 
 
         self.center_x += self.xvelocity
@@ -278,8 +292,8 @@ class Boid:
             ry = px * math.sin(rad) + py * math.cos(rad)
             rotated_points.append((self.center_x + rx, self.center_y + ry))
 
-        # path_to_draw = list(reversed(self.path_pts))[:100]
-        path_to_draw = self.path_pts
+        path_to_draw = list(reversed(self.path_pts))[:100]
+        # path_to_draw = self.path_pts
 
         # print(self.heading)
 
