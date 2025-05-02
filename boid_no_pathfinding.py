@@ -21,8 +21,8 @@ def update_surface():
     surface = pygame.Surface((WIDTH, HEIGHT))
     surface.fill((4, 30, 66)) # UNH COLORS
 
-    for top_left, bottom_right in map_boxes:
-        pygame.draw.rect(surface=surface, color=(211, 211, 211), rect=pygame.Rect(top_left, bottom_right))
+    # for top_left, bottom_right in map_boxes:
+    #     pygame.draw.rect(surface=surface, color=(211, 211, 211), rect=pygame.Rect(top_left, bottom_right))
 
     new_boids = []
 
@@ -32,7 +32,6 @@ def update_surface():
 
         ret, boid_new = boid.pilot(boids, mouse_xy)
         new_boids.append(boid_new)
-        # ret = boid.pacman_walls()
         if not ret:
             exit(-1)
 
@@ -57,11 +56,11 @@ map_boxes = map_obj.build_map()
 
 boids.append(Boid(100, 100, 1, wall_coords=map_boxes))
 boids.append(Boid(150, 100, 2, wall_coords=map_boxes))
-boids.append(Boid(200, 130, 2, wall_coords=map_boxes))
+boids.append(Boid(180, 130, 2, wall_coords=map_boxes))
 boids.append(Boid(170, 70, 2, wall_coords=map_boxes))
 
-boids.append(Boid(225, 130, 2, wall_coords=map_boxes))
-boids.append(Boid(125, 70, 2, wall_coords=map_boxes))
+boids.append(Boid(225, 150, 2, wall_coords=map_boxes))
+boids.append(Boid(125, 90, 2, wall_coords=map_boxes))
 
 # Game loop
 running = True
@@ -72,6 +71,16 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            x, y = pygame.mouse.get_pos()
+            x = x*(ACTUAL_WIDTH/WIDTH)
+            y = y*(ACTUAL_HEIGHT/HEIGHT)
+            if x < WIDTH - 20 and x > 20 and y < HEIGHT - 20 and y > 0:
+                # boids.append(Boid(x, y, curr_id))
+                ptx = random.randint(70, 100)
+                pty = random.randint(70, 100)
+                boids.append(Boid(ptx, pty, boid_id=curr_id, wall_coords=map_boxes))
+                curr_id += 1
         # elif event.type == pygame.MOUSEBUTTONDOWN:
         #     stopped = True
 
@@ -79,27 +88,14 @@ while running:
         #     surface, new_boids = update_surface()
         #     boids = new_boids
 
-        surface, new_boids = update_surface()
-        boids = new_boids
-        
-        resized_screen = pygame.transform.smoothscale(surface, (ACTUAL_WIDTH,ACTUAL_HEIGHT)) 
-        screen.blit(resized_screen, (0, 0))
+    surface, new_boids = update_surface()
+    boids = new_boids
+    
+    resized_screen = pygame.transform.smoothscale(surface, (ACTUAL_WIDTH,ACTUAL_HEIGHT)) 
+    screen.blit(resized_screen, (0, 0))
 
-
-
-        pygame.display.update()
-        clock.tick(60)
+    pygame.display.update()
+    clock.tick(60)
             
-
-        # elif event.type == pygame.MOUSEBUTTONDOWN:
-        #     x, y = pygame.mouse.get_pos()
-        #     x = x*(ACTUAL_WIDTH/WIDTH)
-        #     y = y*(ACTUAL_HEIGHT/HEIGHT)
-        #     if x < WIDTH - 20 and x > 20 and y < HEIGHT - 20 and y > 0:
-        #         # boids.append(Boid(x, y, curr_id))
-        #         ptx = random.randint(70, 100)
-        #         pty = random.randint(70, 100)
-        #         boids.append(Boid(ptx, pty, boid_id=curr_id))
-        #         curr_id += 1
 
 pygame.quit()
