@@ -1,3 +1,4 @@
+import numpy as np
 import random
 import math
 
@@ -27,6 +28,7 @@ class Boid:
     #   random heading
     #   random velocity
     def __init__(self, init_x, init_y, boid_id, wall_coords):
+        print(f"spawning boid id={boid_id}...")
         self.center_x = init_x
         self.center_y = init_y
         self.boid_id = boid_id
@@ -49,35 +51,52 @@ class Boid:
     # COLLISION AVOIDANCE
     # # # # # # # # # # # # # # # # # # # # 
 
+    # NOTE: FIX ME
     def avoid_walls(self):
+        turn_factor = 1
 
-        wall_distance = 100 #50
-        turn_factor = 0.5
+        for top_left_xy, width_height in self.wall_coords:
+            # print(f"top_left = {top_left}, bottom_right = {bottom_right}")
+            horizontal_span = (top_left_xy[0], top_left_xy[0] + width_height[0])
+            vertical_span = (top_left_xy[1], top_left_xy[1] + width_height[1])
 
-        for top_left, bottom_right in self.wall_coords:
-            # left wall
-            if self.center_x - wall_distance < 0:
-                # rotated 'up' or flat
-                self.xvelocity += turn_factor
+            # check if we will be in obstacle
+            future_xloc = self.center_x + (self.xvelocity*5)
+            future_yloc = self.center_y + (self.yvelocity*5)
 
-            # right wall
-            if self.center_x + wall_distance >= WIDTH:
-                self.xvelocity -= turn_factor
+            if future_xloc >= horizontal_span[0] and future_xloc <= horizontal_span[1] and future_yloc >= vertical_span[0] and future_yloc <= vertical_span[1]:
+                # with x range
+                if self.center_y < vertical_span[0]:
+                    # boid below
+                    # print("1")
+                    self.yvelocity -= turn_factor
+                elif self.center_y > vertical_span[1]:
+                    # print("2")
+                    self.yvelocity += turn_factor
 
-            # top
-            if self.center_y + wall_distance >= HEIGHT:
-                self.yvelocity -= turn_factor
+                if self.center_x < horizontal_span[0]:
+                    # print("3")
+                    self.xvelocity -= turn_factor
+                elif self.center_x > horizontal_span[1]:
+                    # print("4")
+                    self.xvelocity += turn_factor
 
-            # bottom
-            if self.center_y - wall_distance < 0:
-                self.yvelocity += turn_factor
+        # self.xvelocity += x_accumulate
+        # self.yvelocity += y_accumulate
 
         return True
     
+    
     def avoid_borders(self):
 
-        wall_distance = 100
+        wall_distance = 80
         turn_factor = 0.5
+
+        # issue with boid going directly straight vertical or horizontal
+        if self.yvelocity == 0:
+            self.yvelocity -= 1
+        if self.xvelocity == 0:
+            self.xvelocity += 1
 
         # left wall
         if self.center_x - wall_distance < 0:
@@ -118,12 +137,6 @@ class Boid:
         curr_speed = math.sqrt( self.xvelocity ** 2 + self.yvelocity ** 2)
         self.xvelocity += avoid_force_x *2#* curr_speed
         self.yvelocity += avoid_force_y *2#* curr_speed
-
-
-        # wall avoidance
-        # self.avoid_walls()
-
-        # self.avoid_borders()
     
     # # # # # # # # # # # # # # # # # # # # 
     # FLOCK CENTERING
@@ -227,6 +240,11 @@ class Boid:
         # self.yvelocity += mouse_scalar*mouse_diff_y
 
 
+        # wall avoidance
+        self.avoid_walls()
+        self.avoid_borders()
+
+
         if num_neighbhors > 0:
             # self.xvelocity *= mouse_diff_x
             # self.xvelocity *= mouse_diff_y
@@ -265,8 +283,6 @@ class Boid:
             self.xvelocity = (self.xvelocity/speed) * MIN_SPEED
             self.yvelocity = (self.yvelocity/speed) * MIN_SPEED
 
-        self.avoid_borders()
-
 
         self.center_x += self.xvelocity
         self.center_y += self.yvelocity
@@ -274,27 +290,33 @@ class Boid:
 
         self.path_pts.append((self.center_x, self.center_y))
 
-        return True, self
+        return self
 
     def get_boid(self):
-        # Define triangle relative to center
-        points = [
-            (self.size, 0),
-            (-self.size, -self.size+4),
-            (-self.size, self.size-4)
-        ]
+        # Define triangle relative to center as a NumPy array
+        points = np.array([
+            [self.size, 0],
+            [-self.size, -self.size + 4],
+            [-self.size, self.size - 4]
+        ])
 
-        # Rotate points
-        rotated_points = []
-        for px, py in points:
-            rad = math.atan2(self.yvelocity, self.xvelocity)
-            rx = px * math.cos(rad) - py * math.sin(rad)
-            ry = px * math.sin(rad) + py * math.cos(rad)
-            rotated_points.append((self.center_x + rx, self.center_y + ry))
+        # Calculate rotation angle using NumPy's atan2
+        rad = np.arctan2(self.yvelocity, self.xvelocity)
+        cos_rad = np.cos(rad)
+        sin_rad = np.sin(rad)
+
+        # Create rotation matrix
+        rotation_matrix = np.array([
+            [cos_rad, sin_rad],
+            [-sin_rad, cos_rad]
+        ])
+
+        # Rotate all points at once using matrix multiplication
+        rotated_points_relative = points @ rotation_matrix
+
+        # Translate points to the boid's center
+        rotated_points = rotated_points_relative + np.array([self.center_x, self.center_y])
 
         path_to_draw = list(reversed(self.path_pts))[:100]
-        # path_to_draw = self.path_pts
 
-        # print(self.heading)
-
-        return rotated_points, self.center_x, self.center_y, self.sense_radius, self.color, path_to_draw
+        return rotated_points.tolist(), self.center_x, self.center_y, self.sense_radius, self.color, path_to_draw

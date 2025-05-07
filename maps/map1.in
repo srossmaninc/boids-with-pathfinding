@@ -1,8 +1,8 @@
 # map file
-# top left followed by bottom right
-[0, 0, 20, 1920]
-[350, 0, 1450, 50]
-[0, 350, 1080, 250]
-[0, 950, 1920, 1080]
-[1450, 0, 1920, 350]
-[1700, 0, 1920, 1080]
+# top left x, y followed by width and height
+0, 350, 1080, 150
+750, 950, 50, 50
+#1840, 0, 80, 570
+
+# lines starting with '!' contain the objectives coordinates
+! 150, 960
