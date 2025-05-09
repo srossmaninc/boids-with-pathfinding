@@ -1,5 +1,5 @@
 import pygame
-from boid import Boid, WIDTH, HEIGHT
+from boid import Boid, WIDTH, HEIGHT, END_GOAL_RADIUS
 from map_build import Map
 import random
 
@@ -16,16 +16,6 @@ clock = pygame.time.Clock()
 
 # List to hold triangle sprites
 boids = []
-end_goal_radius = 30
-
-def check_course_complete(boid_x, boid_y, objective_coordx, objective_coordy):
-    # checks if a boid is touching 'end' green circle
-    # NOTE: euclid distance isn't square rooted for potential speedup
-    euclid_dist = (objective_coordx - boid_x)**2 + (objective_coordy-boid_y)**2
-    if euclid_dist < end_goal_radius**2:
-        return True
-    else:
-        return False
 
 def update_surface():
     surface = pygame.Surface((WIDTH, HEIGHT))
@@ -34,7 +24,7 @@ def update_surface():
     for top_left_xy, width_height in map_boxes:
         pygame.draw.rect(surface=surface, color=(211, 211, 211), rect=pygame.Rect(top_left_xy, width_height))
 
-    pygame.draw.circle(surface, (36, 252, 3), (objective_coords), end_goal_radius)
+    pygame.draw.circle(surface, (36, 252, 3), (objective_coords), END_GOAL_RADIUS)
 
     new_boids = []
 
@@ -42,11 +32,9 @@ def update_surface():
 
     for boid in boids:
 
-        boid_new = boid.pilot(boids, mouse_xy)
+        boid_new = boid.pilot(boids, mouse_xy, objective_coords)
         #####
-        if check_course_complete(boid_new.center_x, boid_new.center_y, objective_coords[0], objective_coords[1]):
-            print(f"boid id={boid_new.boid_id} has completed course!")
-        else:
+        if boid_new != None:
             new_boids.append(boid_new)
             rotated_points, center_x, center_y, sense_radius, color, path_to_draw = boid.get_boid()
 
@@ -64,15 +52,14 @@ if __name__ == '__main__':
     map_obj = Map("map1.in")
     map_boxes, objective_coords = map_obj.build_map()
 
-    boids.append(Boid(100, 100, 1, wall_coords=map_boxes))
+    boids.append(Boid(100, 100, curr_id, wall_coords=map_boxes))
+    curr_id += 1
     # boids.append(Boid(150, 100, 2, wall_coords=map_boxes))
     # boids.append(Boid(180, 130, 3, wall_coords=map_boxes))
     # boids.append(Boid(170, 70, 4, wall_coords=map_boxes))
 
     # boids.append(Boid(225, 150, 5, wall_coords=map_boxes))
     # boids.append(Boid(125, 90, 6, wall_coords=map_boxes))
-
-    curr_id = 7
 
     # Game loop
     running = True
