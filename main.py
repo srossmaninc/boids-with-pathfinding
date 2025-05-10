@@ -50,6 +50,7 @@ if __name__ == '__main__':
     curr_id = 0
 
     map_obj = Map("map1.in")
+    # map_obj = Map("map2.in")
     map_boxes, objective_coords = map_obj.build_map()
 
     boids.append(Boid(100, 100, curr_id, wall_coords=map_boxes))

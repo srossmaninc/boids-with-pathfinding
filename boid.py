@@ -19,16 +19,6 @@ I'd like to thank the nice ECE department at Cornell for simplifying scary vecto
 https://people.ece.cornell.edu/land/courses/ece4760/labs/s2021/Boids/Boids.html#:~:text=Boids%20is%20an%20artificial%20life,very%20simple%20set%20of%20rules.
 """
 
-class ProblemDef:
-    def __init__(self, action_cost):
-        self.action_cost = action_cost
-        # actions has the form (dx delta, dy delta)
-        self.actions = [
-            (1, 1), # move right, down
-            (1, -1), # move left, up
-            (-1, 1), # move left, down
-            (-1, -1) # move right, up
-        ]
 
 class Boid:
     center_x = 0
@@ -45,7 +35,12 @@ class Boid:
         print(f"spawning boid id={boid_id}...")
         self.start_time = time.time()
 
-        self.problem_def = ProblemDef(1)
+        self.actions = [
+            (1, 0), # right
+            (-1, 0), # left
+            (0, 1), # down
+            (0, -1) # up
+        ]
 
         self.center_x = init_x
         self.center_y = init_y
@@ -236,86 +231,69 @@ class Boid:
         # | s   |<- previous state
         # | s'  |<- current state
         # | s'' |<- next state
+
+
+        # REPALCE EVERYTGHING WITH ITERATOR MAP CALLS
     def lrta_star_agent(self, s, objective_coords):
-        # NOTE: define current state here
-        #        ^^^ get from above
-        prev_a = None
+
+        # print("----------")
 
         if self.current_s == objective_coords:
             return ""
         
         if self.H.get(self.current_s) == None:
+
             self.H[self.current_s] = self.h(self.current_s, objective_coords)
+
         if self.prev_s != None:
-            self.results[(self.prev_s, prev_a)] = self.current_s
+            self.results[(self.prev_s, self.a)] = self.current_s
 
-            temp_H_val = 10000
-            # NOTE: FIX ME!!!
-            for b1 in self.problem_def.actions:
-                temp_cost = self.lrta_star_cost(self.prev_s, b1, self.current_s, objective_coords)
-                if temp_cost < temp_H_val:
-                    temp_H_val = temp_cost
-            self.H[self.prev_s] = temp_H_val
+            best_cost = float('inf')
+            for b1 in self.actions:
+                applied_b1 = ( self.prev_s[0] + b1[0], self.prev_s[1] + b1[1] )
 
+                self.results[(self.prev_s, b1)] = applied_b1
 
-        # REPALCE EVERYTGHING WITH ITERATOR MAP CALLS
+                temp_cost = self.lrta_star_cost(self.prev_s, b1, self.results[(self.prev_s, b1)], objective_coords)
+                if temp_cost < best_cost:
+                    best_cost = temp_cost
+            self.H[self.prev_s] = best_cost
 
+        best_cost2 = float('inf')
+        best_action = None
+        # stuff with s'' (next state)
+        for b2 in self.actions:
+            applied_b2 = ( self.current_s[0] + b2[0], self.current_s[1] + b2[1] )
+            # print(f"current_s {self.current_s} => {applied_b2}")
+            self.results[(self.current_s, b2)] = applied_b2
+            temp_calc = self.lrta_star_cost(self.current_s, b2, self.results[(self.current_s, b2)], objective_coords)
 
-
-        temp_a_h = 10000
-        temp_a = None
-        # stuff with s''
-        for b2 in self.problem_def.actions:
-            applied_b2 = ( self.current_s[0]+b2[0], self.current_s[1]+b2[1] )
-            temp_calc = self.lrta_star_cost(self.current_s, b2, applied_b2, objective_coords)
-            if temp_calc < temp_a_h:
-                temp_a = b2
+            if temp_calc < best_cost2:
+                # print(f"replaced {temp_a_h} with {temp_calc}")
+                best_cost2 = temp_calc
+                best_action = b2
 
         self.prev_s = self.current_s
 
-        return temp_a
+        # print(f"chosen action -> {best_action}")
+
+        return best_action
     
     def h(self, state_in_question, objective_coords):
-        return math.sqrt( (objective_coords[0] - state_in_question[0])**2 + (objective_coords[1] - state_in_question[1])**2 )
+        dx = (objective_coords[0] - (state_in_question[0]))
+        dy = (objective_coords[1] - (state_in_question[1]))
+        return math.sqrt( dx**2 + dy**2 )
 
     def lrta_star_cost(self, s1, a, s2, objective_coords):
         # if the s_prime provided isn't in H yet, return h(s)
         if self.H.get(s2) == None:
             # euclidean distance
-            print("using old state")
-            return self.h(s1, objective_coords)
+            # print("using old state")
+            return self.h(s2, objective_coords)
         else:
             # for now, MAKE ALL ACTION COSTS 1
             print(f"using new state H val -> {self.H[s2]}")
-            return self.problem_def.action_cost + self.H[s2]
-    
-    # # # # # # # # # # # # # # # # # # # # 
-    # FOLLOW MOUSE
-    # # # # # # # # # # # # # # # # # # # # 
-
-    def follow_mouse(self, mouse_xy):
-        # mouse_diff_x = (mouse_xy[0] - self.center_x) / self.center_x
-        # mouse_diff_y = (mouse_xy[1] - self.center_y) / self.center_y
-        mouse_scalar = 0.05  # Adjust this value
-
-        mouse_diff_x = mouse_xy[0] - self.center_x
-        mouse_diff_y = mouse_xy[1] - self.center_y
-
-        distance_to_mouse_sq = mouse_diff_x**2 + mouse_diff_y**2
-
-        if distance_to_mouse_sq > 0:  # Avoid division by zero if mouse is at the boid's center
-            distance_to_mouse = distance_to_mouse_sq**0.5
-            direction_x = mouse_diff_x / distance_to_mouse
-            direction_y = mouse_diff_y / distance_to_mouse
-
-            xvelocity_delta = mouse_scalar * direction_x
-            yvelocity_delta = mouse_scalar * direction_y
-
-            # print(f"mouse_diff_x {xvelocity_delta} mouse_diff_y {yvelocity_delta}")
-
-            self.xvelocity += xvelocity_delta
-            self.yvelocity += yvelocity_delta
-        return mouse_diff_x, mouse_diff_y
+            return 1 + self.H[s2]
 
 
     # # # # # # # # # # # # # # # # # # # # 
@@ -355,12 +333,6 @@ class Boid:
             yvelocity_sum += neighbor.yvelocity
 
         # NOTE: PRECENDENCE LEVELS
-        mouse_scalar = 1
-        # mouse_diff_x, mouse_diff_y = self.follow_mouse(mouse_xy)
-        # mouse_diff_x, mouse_diff_y = 0, 0
-
-        # self.xvelocity += mouse_scalar*mouse_diff_x
-        # self.yvelocity += mouse_scalar*mouse_diff_y
 
 
         # wall avoidance
@@ -369,8 +341,6 @@ class Boid:
 
 
         if num_neighbhors > 0:
-            # self.xvelocity *= mouse_diff_x
-            # self.xvelocity *= mouse_diff_y
 
             self.collision_avoidance(neighborhood=neighbhors)
 
@@ -386,23 +356,17 @@ class Boid:
                 match_v_scalar = 0.2
                 diff_vx, diff_vy = self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
 
-                # # with mouse
-                # self.xvelocity += mouse_scalar*mouse_diff_x + centering_scalar*diff_x1 + match_v_scalar*diff_vx
-                # self.yvelocity += mouse_scalar*mouse_diff_y + centering_scalar*diff_y1 + match_v_scalar*diff_vy
-                # without
                 self.xvelocity += centering_scalar*diff_x1 + match_v_scalar*diff_vx
                 self.yvelocity += centering_scalar*diff_y1 + match_v_scalar*diff_vy
 
         lrta_next_act = self.lrta_star_agent(self.prev_s, objective_coords)
-        lrta_scalar = 0.01
+        lrta_scalar = 0.05
         self.a = lrta_next_act
         self.xvelocity += lrta_scalar*lrta_next_act[0]
         self.yvelocity += lrta_scalar*lrta_next_act[1]
                 
 
-            # print(f"diff_x1 {diff_x1} diff_y1 {diff_y1}")
-            # print(f"diff vx {diff_vx} diff_vy {diff_vy}")
-            # print("------------")
+        # print(self.h((self.center_x, self.center_y), objective_coords))
 
         # collision avoidance
 
