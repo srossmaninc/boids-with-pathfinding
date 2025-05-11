@@ -9,7 +9,7 @@ HEIGHT = 1080
 MAX_SPEED = 5
 MIN_SPEED = 2
 
-END_GOAL_RADIUS = 30
+END_GOAL_RADIUS = 50
 
 """
 This program is based off of Craig Reynold's paper
@@ -57,7 +57,7 @@ class State:
         return hash((self.x_nav, self.y_nav, self.direction))
     
     def __str__(self):
-        return f"x={self.x_nav}, y={self.y_nav}, direction={self.get_dir_string(self.direction)}"
+        return f"x={self.x_nav}, y={self.y_nav}"
     
 class H_Entry:
     def __init__(self, h_val, counter):
@@ -80,14 +80,7 @@ class Boid:
         print(f"spawning boid id={boid_id}...")
         self.start_time = time.time()
 
-        # self.actions = [
-        #     (0.9, 1), # right
-        #     (1.1, 1), # left
-        #     (1, 0.9), # down
-        #     (1, 1.1) # up
-        # ]
-        #self.actions = [45, -45, 35, -35, 90, -90, 270, -270]
-        self.actions = [45, -45, 0, 90, -90, 35, -35, 60, -60]
+        self.actions = [45, -45, 0, 90, -90, 135, -135]
 
         self.center_x = init_x
         self.center_y = init_y
@@ -250,7 +243,7 @@ class Boid:
     # # # # # # # # # # # # # # # # # # # # 
     # GET DIRECTION FROM VELOCITIES
     # # # # # # # # # # # # # # # # # # # # 
-    def get_dir(self, xv, yv, num_directions=4):
+    def get_dir(self, xv, yv, num_directions=6):
         angle = math.atan2(yv, xv)  # returns radians between -π and π
         angle_deg = (math.degrees(angle) + 360) % 360  # normalize to [0, 360)
 
@@ -268,17 +261,24 @@ class Boid:
         vy_rotated = vx * sin_theta + vy * cos_theta
 
         return vx_rotated, vy_rotated
+    
+    def lrta_wall_check(self, applied_s):
+        # if we are in a wall, this is an awful path so return infinity
+        for (x, y), (w, h) in self.wall_coords:
+            horizontal_span = (x, x + w)
+            vertical_span = (y, y + h)
+
+            if applied_s.x >= horizontal_span[0] and applied_s.x <= horizontal_span[1] and applied_s.y >= vertical_span[0] and applied_s.y <= vertical_span[1]:
+                return True
+        return False
 
     def lrta_star_agent(self, objective_coords):
-
-        # print("-----")
 
         if (self.current_s.x, self.current_s.y) == objective_coords:
             return ""
         
         if self.current_s not in self.H:
 
-            # IMPLEMENTING COUNTER!
             self.H[self.current_s] = H_Entry(self.h(self.current_s, objective_coords), 0)
 
         if self.prev_s != None:
@@ -292,13 +292,19 @@ class Boid:
                 new_dir = self.get_dir(proposed_rotated_vec[0], proposed_rotated_vec[1])
                 
                 applied_b1 = State( new_pos_x, new_pos_y, new_dir, proposed_rotated_vec[0], proposed_rotated_vec[1], b_theta1 )
+                if not self.lrta_wall_check(applied_b1):
 
-                self.results[(self.prev_s, b_theta1)] = applied_b1
+                    self.results[(self.prev_s, b_theta1)] = applied_b1
 
-                temp_cost = self.lrta_star_cost(self.prev_s, self.results[(self.prev_s, b_theta1)], objective_coords, 0)
+                    visit_penalty = 0
+                    if applied_b1 in self.H:
+                        # print(f"{self.H[applied_b1].counter}")
+                        visit_penalty = self.H[applied_b1].counter*50
 
-                if temp_cost < best_cost:
-                    best_cost = temp_cost
+                    temp_cost = self.lrta_star_cost(self.results[(self.prev_s, b_theta1)], objective_coords) + visit_penalty
+
+                    if temp_cost < best_cost:
+                        best_cost = temp_cost
             self.H[self.prev_s].h_val = best_cost
             self.H[self.prev_s].counter += 1
 
@@ -306,49 +312,40 @@ class Boid:
         best_action = None
         # stuff with s'' (next state)
         for b_theta2 in self.actions:
-            # print(f"b_theta2: {b_theta2}")
             proposed_rotated_vec2 = self.rotate_velocity_2d(self.current_s.xvelocity, self.current_s.yvelocity, b_theta2)
             new_pos_x2 = self.current_s.x + proposed_rotated_vec2[0]
             new_pos_y2 = self.current_s.y + proposed_rotated_vec2[1]
             new_dir2 = self.get_dir(proposed_rotated_vec2[0], proposed_rotated_vec2[1])
 
             applied_b2 = State( new_pos_x2, new_pos_y2, new_dir2, proposed_rotated_vec2[0], proposed_rotated_vec2[1], b_theta2 )
-            # if we are in a wall, this is an awful path so return infinity
-            for (x, y), (w, h) in self.wall_coords:
-                horizontal_span = (x, x + w)
-                vertical_span = (y, y + h)
 
-                if applied_b2.x >= horizontal_span[0] and applied_b2.x <= horizontal_span[1] and applied_b2.y >= vertical_span[0] and applied_b2.y <= vertical_span[1]:
-                    continue
-            
-            self.results[(self.current_s, b_theta2)] = applied_b2
+            if not self.lrta_wall_check(applied_b2):
 
-            temp_calc = self.lrta_star_cost(self.current_s, self.results[(self.current_s, b_theta2)], objective_coords, 1)
+                self.results[(self.current_s, b_theta2)] = applied_b2
 
-            # if temp_calc == best_cost2:
-                # print(f"tie at action {best_action} and {b_theta2}")
-                # if best_action == self.current_s.action_to:
-                #     best_action = b_theta2
+                temp_calc = self.lrta_star_cost(self.results[(self.current_s, b_theta2)], objective_coords)
 
-            if temp_calc < best_cost2:
-                # print(f"action {b_theta2} {temp_calc} is better than {best_action} {best_cost2}")
-                best_cost2 = temp_calc
-                best_action = b_theta2
+                if temp_calc == best_cost2:
+                    # print(f"tie at action {best_action} and {b_theta2}")
+                    if best_action == self.current_s.action_to:
+                        best_action = b_theta2
 
-        if self.prev_s != None and self.H[self.prev_s].counter > 1:
-            # print(f"updated best action from {self.prev_s.action_to} -> {self.current_s.action_to}")
-            print(self.H[self.prev_s])
-        # print(f"chosen action is {best_action} with cost {best_cost2}")
+                if temp_calc < best_cost2:
+                    best_cost2 = temp_calc
+                    best_action = b_theta2
+
         self.prev_s = self.current_s
 
-        # print(f"chosen action -> {best_action}")
+        # print(f"best action -> {best_action}")
+        if best_action == None:
+            # print("HERE!")
+            best_action = 180
 
         return best_action
 
     def h1(self, state_in_question, objective_coords):
         dx = (objective_coords[0] - (state_in_question.x))
         dy = (objective_coords[1] - (state_in_question.y))
-        # return math.sqrt( dx**2 + dy**2 )
         return abs(dx) + abs(dy)
     
     def h(self, state_in_question, objective_coords):
@@ -356,7 +353,7 @@ class Boid:
         dy = (objective_coords[1] - (state_in_question.y))
         return math.sqrt( dx**2 + dy**2 )
 
-    def lrta_star_cost(self, s1, s2, objective_coords, which):
+    def lrta_star_cost(self, s2, objective_coords):
             
         # if the s_prime provided isn't in H yet, return h(s)
         if s2 not in self.H:
@@ -364,9 +361,6 @@ class Boid:
             # print(f"not in H -> {s2}")
             return self.h(s2, objective_coords)
         else:
-            # for now, MAKE ALL ACTION COSTS 1
-            # if self.H[s2][1] > 0:
-            #     print(f"{self.H[s2]} <- {s2}")
             return 1 + self.H[s2].h_val
 
 
