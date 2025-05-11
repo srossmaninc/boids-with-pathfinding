@@ -20,7 +20,7 @@ https://people.ece.cornell.edu/land/courses/ece4760/labs/s2021/Boids/Boids.html#
 """
 
 class State:
-    nav_mesh_interval = 5
+    nav_mesh_interval = 40
 
     def __init__(self, xcoord, ycoord, direction, xvelocity, yvelocity, action_to ):
         self.x = xcoord
@@ -58,6 +58,14 @@ class State:
     
     def __str__(self):
         return f"x={self.x_nav}, y={self.y_nav}, direction={self.get_dir_string(self.direction)}"
+    
+class H_Entry:
+    def __init__(self, h_val, counter):
+        self.h_val = h_val
+        self.counter = counter
+
+    def __str__(self):
+        return f"{self.h_val} was updated {self.counter} times"
 
 class Boid:
     center_x = 0
@@ -78,7 +86,8 @@ class Boid:
         #     (1, 0.9), # down
         #     (1, 1.1) # up
         # ]
-        self.actions = [0, 45, -45]
+        #self.actions = [45, -45, 35, -35, 90, -90, 270, -270]
+        self.actions = [45, -45, 0, 90, -90, 35, -35, 60, -60]
 
         self.center_x = init_x
         self.center_y = init_y
@@ -109,43 +118,58 @@ class Boid:
     # # # # # # # # # # # # # # # # # # # # 
 
     def avoid_walls(self):
-        turn_factor = 2
+        turn_factor = 1
         had_to_avoid = False
 
-        for top_left_xy, width_height in self.wall_coords:
-            # print(f"top_left = {top_left}, bottom_right = {bottom_right}")
-            horizontal_span = (top_left_xy[0], top_left_xy[0] + width_height[0])
-            vertical_span = (top_left_xy[1], top_left_xy[1] + width_height[1])
 
-            # check if we will be in obstacle
-            future_xloc = self.center_x + (self.xvelocity*5)
-            future_yloc = self.center_y + (self.yvelocity*5)
+        # issue with boid going directly straight vertical or horizontal
+        vel_check_x = round(self.xvelocity)
+        vel_check_y = round(self.yvelocity)
+        if vel_check_y == 0:
+            if self.yvelocity < 0:
+                self.yvelocity *= 1.1
+            else:
+                self.yvelocity *= 1.1
+        if vel_check_x == 0:
+            if self.xvelocity < 0:
+                self.xvelocity *= 1.1
+            else:
+                self.xvelocity *= 1.1
+
+        # check if we will be in obstacle
+        future_xloc = self.center_x + (self.xvelocity*MAX_SPEED)
+        future_yloc = self.center_y + (self.yvelocity*MAX_SPEED)
+
+        x_acummulate = 0
+        y_accumulate = 0
+
+        for (x, y), (w, h) in self.wall_coords:
+            # print(f"top_left = {top_left}, bottom_right = {bottom_right}")
+            horizontal_span = (x, x + w)
+            vertical_span = (y, y + h)
 
             if future_xloc >= horizontal_span[0] and future_xloc <= horizontal_span[1] and future_yloc >= vertical_span[0] and future_yloc <= vertical_span[1]:
                 # with x range
-                if self.center_y < vertical_span[0]:
+                if self.center_y <= vertical_span[0]:
                     # boid below
                     # print("1")
-                    self.yvelocity -= turn_factor
-                elif self.center_y > vertical_span[1]:
+                    y_accumulate -= turn_factor
+                elif self.center_y >= vertical_span[1]:
                     # print("2")
-                    self.yvelocity += turn_factor
+                    y_accumulate += turn_factor
 
-                if self.center_x < horizontal_span[0]:
+                if self.center_x <= horizontal_span[0]:
                     # print("3")
-                    self.xvelocity -= turn_factor
-                elif self.center_x > horizontal_span[1]:
+                    x_acummulate -= turn_factor
+                elif self.center_x >= horizontal_span[1]:
                     # print("4")
-                    self.xvelocity += turn_factor
+                    x_acummulate += turn_factor
 
                 had_to_avoid = True
 
+        self.xvelocity += x_acummulate
+        self.yvelocity += y_accumulate
         return had_to_avoid
-
-        # self.xvelocity += x_accumulate
-        # self.yvelocity += y_accumulate
-
-        return True
     
     def avoid_borders(self):
 
@@ -226,69 +250,13 @@ class Boid:
     # # # # # # # # # # # # # # # # # # # # 
     # GET DIRECTION FROM VELOCITIES
     # # # # # # # # # # # # # # # # # # # # 
-    def get_dir(self, xv, yv):
-        if xv > 0 and yv > 0:
-            # headed bottom-right
-            return 1
-        elif xv < 0 and yv > 0:
-            # headed bottom-left
-            return 2
-        elif xv < 0 and yv < 0:
-            # headed top-left
-            return 3
-        elif xv > 0 and yv < 0:
-            # headed top-right
-            return 4
-        print("shouldn't be here!")
+    def get_dir(self, xv, yv, num_directions=4):
+        angle = math.atan2(yv, xv)  # returns radians between -π and π
+        angle_deg = (math.degrees(angle) + 360) % 360  # normalize to [0, 360)
 
-    # # # # # # # # # # # # # # # # # # # # 
-    # A-STAR
-    # # # # # # # # # # # # # # # # # # # # 
-        # A* base code
-        # Q <- ordered list containing just the initial state
-        # Loop
-        #   if Q is empty then return failure
-        #   Node <- Pop(Q)
-        #   if Node is a goal,
-        #       return Node (or path to it)
-        #   else
-        #       Children <- Expand(Node)
-        #       Merge Children into Q, keep sorted by f(n)
-    # RTA* psuedocode
-        # keep has table of h values for visited states
-        # 1. for each neighbor of current state s
-        # 2. either find h in table or do some lookahead
-        # 3. add edge cost to get f
-        # 4. update h(s) to second-best f value
-        # 5. move to best neighbhor
-    # LRTA* (LSS-LRTA*)
-        # 1. single A* lookahead (LSS)
-        # 2. update all h values in LSS
-        # 3. move to frontier
-        # pseudocode:
-        #   1. returns an action
-        #   2. persistent -> result (a table mapping (s,a)->s') initially empty
-        #      H, a tale mapping s to a cost estimate, initially empty
-        # LRTA*-Agent(problem, s', h)
-            # if is_goal(s') then return stop
-            # if s' is a new state (NOT in H) then H[s'] <- h(s')
-            # if s is not null then
-            #   result[state, action] <- s'
-            #   H[s] <- min( LRTA*-Cost( s, b, result[s, b], H ) ) for b in Action(s)
-            # a <- argmin LRTA*-Cost( problem, s', b, result[s', b], H ) for b in actions
-            # s <- s'
-            # return a
-        # LRTA*-Cost(problem, s, a, s', H) returns a cost estimate
-        #   if s' is undefinted then return h(s)
-        #   else return problem.Action-Cost(s, a, s') + H[s']
-        #       ^^^ I will let Action-Cost be equal to 1 (for 1 timestep)
-
-        # | s   |<- previous state
-        # | s'  |<- current state
-        # | s'' |<- next state
-
-
-        # REPALCE EVERYTGHING WITH ITERATOR MAP CALLS
+        bucket_size = 360 / num_directions
+        direction_id = int(angle_deg // bucket_size)
+        return direction_id  # range: [0, num_directions - 1]
 
 
     def rotate_velocity_2d(self, vx, vy, angle_degrees):
@@ -303,13 +271,15 @@ class Boid:
 
     def lrta_star_agent(self, objective_coords):
 
+        # print("-----")
+
         if (self.current_s.x, self.current_s.y) == objective_coords:
             return ""
         
         if self.current_s not in self.H:
 
             # IMPLEMENTING COUNTER!
-            self.H[self.current_s] = (self.h(self.current_s, objective_coords), 0)
+            self.H[self.current_s] = H_Entry(self.h(self.current_s, objective_coords), 0)
 
         if self.prev_s != None:
             self.results[(self.prev_s, self.a)] = self.current_s
@@ -329,31 +299,46 @@ class Boid:
 
                 if temp_cost < best_cost:
                     best_cost = temp_cost
-            self.H[self.prev_s] = (best_cost, self.H[self.prev_s][1] + 1)
+            self.H[self.prev_s].h_val = best_cost
+            self.H[self.prev_s].counter += 1
 
         best_cost2 = float('inf')
         best_action = None
         # stuff with s'' (next state)
         for b_theta2 in self.actions:
+            # print(f"b_theta2: {b_theta2}")
             proposed_rotated_vec2 = self.rotate_velocity_2d(self.current_s.xvelocity, self.current_s.yvelocity, b_theta2)
             new_pos_x2 = self.current_s.x + proposed_rotated_vec2[0]
             new_pos_y2 = self.current_s.y + proposed_rotated_vec2[1]
             new_dir2 = self.get_dir(proposed_rotated_vec2[0], proposed_rotated_vec2[1])
 
             applied_b2 = State( new_pos_x2, new_pos_y2, new_dir2, proposed_rotated_vec2[0], proposed_rotated_vec2[1], b_theta2 )
+            # if we are in a wall, this is an awful path so return infinity
+            for (x, y), (w, h) in self.wall_coords:
+                horizontal_span = (x, x + w)
+                vertical_span = (y, y + h)
+
+                if applied_b2.x >= horizontal_span[0] and applied_b2.x <= horizontal_span[1] and applied_b2.y >= vertical_span[0] and applied_b2.y <= vertical_span[1]:
+                    continue
+            
             self.results[(self.current_s, b_theta2)] = applied_b2
 
             temp_calc = self.lrta_star_cost(self.current_s, self.results[(self.current_s, b_theta2)], objective_coords, 1)
 
             # if temp_calc == best_cost2:
-            #     print(f"tie at action {best_action} and {b_theta2}")
+                # print(f"tie at action {best_action} and {b_theta2}")
+                # if best_action == self.current_s.action_to:
+                #     best_action = b_theta2
 
             if temp_calc < best_cost2:
+                # print(f"action {b_theta2} {temp_calc} is better than {best_action} {best_cost2}")
                 best_cost2 = temp_calc
                 best_action = b_theta2
 
-        if self.prev_s != None and self.H[self.prev_s][1] > 1:
-            print(f"updated best action from {self.prev_s.action_to} -> {self.current_s.action_to}")
+        if self.prev_s != None and self.H[self.prev_s].counter > 1:
+            # print(f"updated best action from {self.prev_s.action_to} -> {self.current_s.action_to}")
+            print(self.H[self.prev_s])
+        # print(f"chosen action is {best_action} with cost {best_cost2}")
         self.prev_s = self.current_s
 
         # print(f"chosen action -> {best_action}")
@@ -372,6 +357,7 @@ class Boid:
         return math.sqrt( dx**2 + dy**2 )
 
     def lrta_star_cost(self, s1, s2, objective_coords, which):
+            
         # if the s_prime provided isn't in H yet, return h(s)
         if s2 not in self.H:
             # euclidean distance
@@ -379,9 +365,9 @@ class Boid:
             return self.h(s2, objective_coords)
         else:
             # for now, MAKE ALL ACTION COSTS 1
-            if self.H[s2][1] > 0:
-                print(f"{self.H[s2]} <- {s2}")
-            return 20 + self.H[s2][0]
+            # if self.H[s2][1] > 0:
+            #     print(f"{self.H[s2]} <- {s2}")
+            return 1 + self.H[s2].h_val
 
 
     # # # # # # # # # # # # # # # # # # # # 
@@ -402,6 +388,8 @@ class Boid:
     # # # # # # # # # # # # # # # # # # # # 
 
     def pilot(self, boids, objective_coords):
+
+        # print(f"xv = {self.xvelocity} yv = {self.yvelocity}")
 
         # findining boid neighbhors
         neighbhors = self.get_neighbhors(boids=boids)
@@ -425,7 +413,7 @@ class Boid:
 
         # wall avoidance
         had_to_avoid = self.avoid_walls()
-        self.avoid_borders()
+        # self.avoid_borders()
 
 
         if num_neighbhors > 0:
@@ -446,16 +434,17 @@ class Boid:
 
                 self.xvelocity += centering_scalar*diff_x1 + match_v_scalar*diff_vx
                 self.yvelocity += centering_scalar*diff_y1 + match_v_scalar*diff_vy
-
-        lrta_next_act_theta = self.lrta_star_agent(objective_coords)
-        lrta_scalar = 0.01
-        self.a = lrta_next_act_theta
-        res = self.rotate_velocity_2d(self.xvelocity, self.yvelocity, lrta_next_act_theta)
-        self.xvelocity += lrta_scalar*res[0]
-        self.yvelocity += lrta_scalar*res[1]
                 
 
         # print(self.h((self.center_x, self.center_y), objective_coords))
+        if not had_to_avoid:
+            lrta_next_act_theta = self.lrta_star_agent(objective_coords)
+            lrta_scalar = 0.01
+            self.a = lrta_next_act_theta
+            # print(f"self.a {self.a}")
+            res = self.rotate_velocity_2d(self.xvelocity, self.yvelocity, lrta_next_act_theta)
+            self.xvelocity += lrta_scalar*res[0]
+            self.yvelocity += lrta_scalar*res[1]
 
         # collision avoidance
 
@@ -470,12 +459,17 @@ class Boid:
             self.xvelocity = (self.xvelocity/speed) * MIN_SPEED
             self.yvelocity = (self.yvelocity/speed) * MIN_SPEED
 
+        self.avoid_walls()
 
         self.center_x += self.xvelocity
         self.center_y += self.yvelocity
 
-        # a state is defined in multiples of 20 so,
-        self.current_s = State( self.center_x, self.center_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity, lrta_next_act_theta )
+        if not had_to_avoid:
+            # a state is defined in multiples of 20 so,
+            self.current_s = State( self.center_x, self.center_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity, lrta_next_act_theta )
+
+        # if had_to_avoid:
+        #     self.H[self.prev_s].h_val = 100
 
 
         self.path_pts.append((self.center_x, self.center_y))
@@ -492,8 +486,8 @@ class Boid:
         if euclid_dist < END_GOAL_RADIUS**2:
             print(f"boid id={self.boid_id} has completed course in {time.time() - self.start_time}!")
             for k, v in self.H.items():
-                if v[1] > 1:
-                    print(f"state {k} was visited {v[1]} times")
+                if v.counter > 1:
+                    print(f"state {k} was visited {v} times")
             return True
         else:
             return False

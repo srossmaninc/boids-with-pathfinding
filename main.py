@@ -50,8 +50,23 @@ if __name__ == '__main__':
     # map_obj = Map("map1.in")
     # map_obj = Map("map2.in")
     # map_obj = Map("map3.in")
-    map_obj = Map("map4.in")
+    # map_obj = Map("map4.in")
+    map_obj = Map("map5.in")
     map_boxes, objective_coords = map_obj.build_map()
+
+    # mandatory walls
+    map_top_left = (-50, -50)
+    map_top_right = (WIDTH - 2, -50)
+    map_bottom_left = (-50, HEIGHT - 2)
+    map_bottom_right = (WIDTH - 2, HEIGHT - 2)
+    # left wall (starts at top_left, goes to bottom left)
+    map_boxes.append( (map_top_left, (52, HEIGHT + 100)) )
+    # top wall (starts at top_left, goes to top_right)
+    map_boxes.append( (map_top_left, (WIDTH + 100, 52)) )
+    # bottom wall (starts at bottom_left, goes to bottom_right)
+    map_boxes.append( (map_bottom_left, (WIDTH + 100, 52)) )
+    # right wall (starts at top_right, goes to bottom_right)
+    map_boxes.append( (map_top_right, (52, HEIGHT + 100)) )
 
     boids.append(Boid(100, 100, curr_id, wall_coords=map_boxes))
     curr_id += 1

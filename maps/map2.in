@@ -1,5 +1,6 @@
 # basic map file
 # top left x, y followed by width and height
 
+
 # lines starting with '!' contain the objectives coordinates
 ! 350, 960
