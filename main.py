@@ -28,11 +28,9 @@ def update_surface():
 
     new_boids = []
 
-    mouse_xy = pygame.mouse.get_pos()
-
     for boid in boids:
 
-        boid_new = boid.pilot(boids, mouse_xy, objective_coords)
+        boid_new = boid.pilot(boids, objective_coords)
         #####
         if boid_new != None:
             new_boids.append(boid_new)
@@ -49,8 +47,9 @@ def update_surface():
 if __name__ == '__main__':
     curr_id = 0
 
-    map_obj = Map("map1.in")
+    # map_obj = Map("map1.in")
     # map_obj = Map("map2.in")
+    map_obj = Map("map3.in")
     map_boxes, objective_coords = map_obj.build_map()
 
     boids.append(Boid(100, 100, curr_id, wall_coords=map_boxes))

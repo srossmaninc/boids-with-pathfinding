@@ -19,14 +19,50 @@ I'd like to thank the nice ECE department at Cornell for simplifying scary vecto
 https://people.ece.cornell.edu/land/courses/ece4760/labs/s2021/Boids/Boids.html#:~:text=Boids%20is%20an%20artificial%20life,very%20simple%20set%20of%20rules.
 """
 
+class State:
+    nav_mesh_interval = 10
+
+    def __init__(self, xcoord, ycoord, direction, xvelocity, yvelocity):
+        self.x = xcoord
+        self.y = ycoord
+        self.xvelocity = xvelocity
+        self.yvelocity = yvelocity
+        self.direction = direction
+
+        self.x_nav = int(xcoord / self.nav_mesh_interval)
+        self.y_nav = int(ycoord / self.nav_mesh_interval)
+
+    def get_dir_string(self, direction):
+        if direction == 1:
+            return "headed bottom-right"
+        elif direction == 2:
+            return "headed bottom-left"
+        elif direction == 3:
+            return "headed top-left"
+        elif direction == 4:
+            return "headed top-right"
+        else:
+            print("why are you here?")
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, State) and
+            self.x_nav == other.x_nav and
+            self.y_nav == other.y_nav and
+            self.direction == other.direction
+        )
+
+    def __hash__(self):
+        return hash((self.x_nav, self.y_nav, self.direction))
+    
+    def __str__(self):
+        return f"x={self.x_nav}, y={self.y_nav}, direction={self.get_dir_string(self.direction)}"
 
 class Boid:
     center_x = 0
     center_y = 0
     xvelocity = 0
     yvelocity = 0
-
-    center_points = []
 
     # Per the paper,
     #   random heading
@@ -35,12 +71,13 @@ class Boid:
         print(f"spawning boid id={boid_id}...")
         self.start_time = time.time()
 
-        self.actions = [
-            (1, 0), # right
-            (-1, 0), # left
-            (0, 1), # down
-            (0, -1) # up
-        ]
+        # self.actions = [
+        #     (0.9, 1), # right
+        #     (1.1, 1), # left
+        #     (1, 0.9), # down
+        #     (1, 1.1) # up
+        # ]
+        self.actions = [0, 45, -45]
 
         self.center_x = init_x
         self.center_y = init_y
@@ -61,7 +98,7 @@ class Boid:
 
         self.H = {} # (state (to) cost estimate)
         self.results = {} # ( (s, a) to s' )
-        self.current_s = ( init_x, init_y )
+        self.current_s = State(init_x, init_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity )
         self.prev_s = None # initially set to None
         self.a = (0, 0) # initially set to None
 
@@ -173,7 +210,6 @@ class Boid:
         diff_y = center_flock_y - self.center_y
         # print(f"curr_heading_relative={center_heading_relative} boid_heading={self.heading}")
         # print(f"diff_x {diff_x} diff_y {diff_y}")
-        self.center_points.append( (center_flock_x, center_flock_y) )
 
         return diff_x, diff_y
 
@@ -185,6 +221,24 @@ class Boid:
         avg_xvelocity = xvelocity_sum / num_neighbors
         avg_yvelocity = yvelocity_sum / num_neighbors
         return (avg_xvelocity - self.xvelocity), (avg_yvelocity - self.yvelocity)
+
+    # # # # # # # # # # # # # # # # # # # # 
+    # GET DIRECTION FROM VELOCITIES
+    # # # # # # # # # # # # # # # # # # # # 
+    def get_dir(self, xv, yv):
+        if xv > 0 and yv > 0:
+            # headed bottom-right
+            return 1
+        elif xv < 0 and yv > 0:
+            # headed bottom-left
+            return 2
+        elif xv < 0 and yv < 0:
+            # headed top-left
+            return 3
+        elif xv > 0 and yv < 0:
+            # headed top-right
+            return 4
+        print("shouldn't be here!")
 
     # # # # # # # # # # # # # # # # # # # # 
     # A-STAR
@@ -234,66 +288,91 @@ class Boid:
 
 
         # REPALCE EVERYTGHING WITH ITERATOR MAP CALLS
-    def lrta_star_agent(self, s, objective_coords):
 
-        # print("----------")
 
-        if self.current_s == objective_coords:
+    def rotate_velocity_2d(self, vx, vy, angle_degrees):
+        angle_radians = np.deg2rad(angle_degrees)
+        cos_theta = np.cos(angle_radians)
+        sin_theta = np.sin(angle_radians)
+
+        vx_rotated = vx * cos_theta - vy * sin_theta
+        vy_rotated = vx * sin_theta + vy * cos_theta
+
+        return vx_rotated, vy_rotated
+
+    def lrta_star_agent(self, objective_coords):
+
+        if (self.current_s.x, self.current_s.y) == objective_coords:
             return ""
         
-        if self.H.get(self.current_s) == None:
+        if self.current_s not in self.H:
 
-            self.H[self.current_s] = self.h(self.current_s, objective_coords)
+            # IMPLEMENTING COUNTER!
+            self.H[self.current_s] = (self.h(self.current_s, objective_coords), 0)
 
         if self.prev_s != None:
             self.results[(self.prev_s, self.a)] = self.current_s
 
             best_cost = float('inf')
-            for b1 in self.actions:
-                applied_b1 = ( self.prev_s[0] + b1[0], self.prev_s[1] + b1[1] )
+            for b_theta1 in self.actions:
+                proposed_rotated_vec = self.rotate_velocity_2d(self.prev_s.xvelocity, self.prev_s.yvelocity, b_theta1)
+                new_pos_x = self.prev_s.x + proposed_rotated_vec[0]
+                new_pos_y = self.prev_s.y + proposed_rotated_vec[1]
+                new_dir = self.get_dir(proposed_rotated_vec[0], proposed_rotated_vec[1])
+                
+                applied_b1 = State( new_pos_x, new_pos_y, new_dir, proposed_rotated_vec[0], proposed_rotated_vec[1] )
 
-                self.results[(self.prev_s, b1)] = applied_b1
+                self.results[(self.prev_s, b_theta1)] = applied_b1
 
-                temp_cost = self.lrta_star_cost(self.prev_s, b1, self.results[(self.prev_s, b1)], objective_coords)
+                temp_cost = self.lrta_star_cost(self.prev_s, self.results[(self.prev_s, b_theta1)], objective_coords, 0)
+
                 if temp_cost < best_cost:
                     best_cost = temp_cost
-            self.H[self.prev_s] = best_cost
+            self.H[self.prev_s] = (best_cost, self.H[self.prev_s][1] + 1)
 
         best_cost2 = float('inf')
         best_action = None
         # stuff with s'' (next state)
-        for b2 in self.actions:
-            applied_b2 = ( self.current_s[0] + b2[0], self.current_s[1] + b2[1] )
-            # print(f"current_s {self.current_s} => {applied_b2}")
-            self.results[(self.current_s, b2)] = applied_b2
-            temp_calc = self.lrta_star_cost(self.current_s, b2, self.results[(self.current_s, b2)], objective_coords)
+        for b_theta2 in self.actions:
+            proposed_rotated_vec2 = self.rotate_velocity_2d(self.current_s.xvelocity, self.current_s.yvelocity, b_theta2)
+            new_pos_x2 = self.current_s.x + proposed_rotated_vec2[0]
+            new_pos_y2 = self.current_s.y + proposed_rotated_vec2[1]
+            new_dir2 = self.get_dir(proposed_rotated_vec2[0], proposed_rotated_vec2[1])
+
+            applied_b2 = State( new_pos_x2, new_pos_y2, new_dir2, proposed_rotated_vec2[0], proposed_rotated_vec2[1] )
+            self.results[(self.current_s, b_theta2)] = applied_b2
+
+            temp_calc = self.lrta_star_cost(self.current_s, self.results[(self.current_s, b_theta2)], objective_coords, 1)
+
+            # if temp_calc == best_cost2:
+            #     print(f"tie at action {best_action} and {b_theta2}")
 
             if temp_calc < best_cost2:
-                # print(f"replaced {temp_a_h} with {temp_calc}")
                 best_cost2 = temp_calc
-                best_action = b2
+                best_action = b_theta2
 
         self.prev_s = self.current_s
 
         # print(f"chosen action -> {best_action}")
 
         return best_action
-    
-    def h(self, state_in_question, objective_coords):
-        dx = (objective_coords[0] - (state_in_question[0]))
-        dy = (objective_coords[1] - (state_in_question[1]))
-        return math.sqrt( dx**2 + dy**2 )
 
-    def lrta_star_cost(self, s1, a, s2, objective_coords):
+    def h(self, state_in_question, objective_coords):
+        dx = (objective_coords[0] - (state_in_question.x))
+        dy = (objective_coords[1] - (state_in_question.y))
+        # return math.sqrt( dx**2 + dy**2 )
+        return abs(dx) + abs(dy)
+
+    def lrta_star_cost(self, s1, s2, objective_coords, which):
         # if the s_prime provided isn't in H yet, return h(s)
-        if self.H.get(s2) == None:
+        if s2 not in self.H:
             # euclidean distance
-            # print("using old state")
+            # print(f"not in H -> {s2}")
             return self.h(s2, objective_coords)
         else:
             # for now, MAKE ALL ACTION COSTS 1
-            print(f"using new state H val -> {self.H[s2]}")
-            return 1 + self.H[s2]
+            # print(f"{self.H[s2]} <- {s2}")
+            return 1 + self.H[s2][0]
 
 
     # # # # # # # # # # # # # # # # # # # # 
@@ -313,7 +392,7 @@ class Boid:
     # PILOT
     # # # # # # # # # # # # # # # # # # # # 
 
-    def pilot(self, boids, mouse_xy, objective_coords):
+    def pilot(self, boids, objective_coords):
 
         # findining boid neighbhors
         neighbhors = self.get_neighbhors(boids=boids)
@@ -359,11 +438,12 @@ class Boid:
                 self.xvelocity += centering_scalar*diff_x1 + match_v_scalar*diff_vx
                 self.yvelocity += centering_scalar*diff_y1 + match_v_scalar*diff_vy
 
-        lrta_next_act = self.lrta_star_agent(self.prev_s, objective_coords)
-        lrta_scalar = 0.05
-        self.a = lrta_next_act
-        self.xvelocity += lrta_scalar*lrta_next_act[0]
-        self.yvelocity += lrta_scalar*lrta_next_act[1]
+        lrta_next_act_theta = self.lrta_star_agent(objective_coords)
+        lrta_scalar = 0.01
+        self.a = lrta_next_act_theta
+        res = self.rotate_velocity_2d(self.xvelocity, self.yvelocity, lrta_next_act_theta)
+        self.xvelocity += lrta_scalar*res[0]
+        self.yvelocity += lrta_scalar*res[1]
                 
 
         # print(self.h((self.center_x, self.center_y), objective_coords))
@@ -385,8 +465,8 @@ class Boid:
         self.center_x += self.xvelocity
         self.center_y += self.yvelocity
 
-        self.current_s = ( self.center_x, self.center_y )
-
+        # a state is defined in multiples of 20 so,
+        self.current_s = State( self.center_x, self.center_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity )
 
 
         self.path_pts.append((self.center_x, self.center_y))
@@ -402,6 +482,9 @@ class Boid:
         euclid_dist = (objective_coordx - self.center_x)**2 + (objective_coordy - self.center_y)**2
         if euclid_dist < END_GOAL_RADIUS**2:
             print(f"boid id={self.boid_id} has completed course in {time.time() - self.start_time}!")
+            for k, v in self.H.items():
+                if v[1] > 1:
+                    print(f"state {k} was visited {v[1]} times")
             return True
         else:
             return False
@@ -431,6 +514,7 @@ class Boid:
         # Translate points to the boid's center
         rotated_points = rotated_points_relative + np.array([self.center_x, self.center_y])
 
-        path_to_draw = list(reversed(self.path_pts))[:100]
+        # path_to_draw = list(reversed(self.path_pts))[:100]
+        path_to_draw = self.path_pts
 
         return rotated_points.tolist(), self.center_x, self.center_y, self.sense_radius, self.color, path_to_draw
