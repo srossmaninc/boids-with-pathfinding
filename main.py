@@ -49,7 +49,8 @@ if __name__ == '__main__':
 
     # map_obj = Map("map1.in")
     # map_obj = Map("map2.in")
-    map_obj = Map("map3.in")
+    # map_obj = Map("map3.in")
+    map_obj = Map("map4.in")
     map_boxes, objective_coords = map_obj.build_map()
 
     boids.append(Boid(100, 100, curr_id, wall_coords=map_boxes))

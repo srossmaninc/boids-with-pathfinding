@@ -20,14 +20,15 @@ https://people.ece.cornell.edu/land/courses/ece4760/labs/s2021/Boids/Boids.html#
 """
 
 class State:
-    nav_mesh_interval = 10
+    nav_mesh_interval = 5
 
-    def __init__(self, xcoord, ycoord, direction, xvelocity, yvelocity):
+    def __init__(self, xcoord, ycoord, direction, xvelocity, yvelocity, action_to ):
         self.x = xcoord
         self.y = ycoord
         self.xvelocity = xvelocity
         self.yvelocity = yvelocity
         self.direction = direction
+        self.action_to = action_to
 
         self.x_nav = int(xcoord / self.nav_mesh_interval)
         self.y_nav = int(ycoord / self.nav_mesh_interval)
@@ -87,8 +88,8 @@ class Boid:
 
         self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-        self.xvelocity = random.randint(MIN_SPEED, MAX_SPEED) # 5
-        self.yvelocity = random.randint(MIN_SPEED, MAX_SPEED) # 5
+        self.xvelocity = 3#random.randint(MIN_SPEED, MAX_SPEED) # 5
+        self.yvelocity = 3#random.randint(MIN_SPEED, MAX_SPEED) # 5
         self.size = 7
 
         # 'radius' of sensitivty circle
@@ -98,7 +99,7 @@ class Boid:
 
         self.H = {} # (state (to) cost estimate)
         self.results = {} # ( (s, a) to s' )
-        self.current_s = State(init_x, init_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity )
+        self.current_s = State(init_x, init_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity, None )
         self.prev_s = None # initially set to None
         self.a = (0, 0) # initially set to None
 
@@ -108,7 +109,7 @@ class Boid:
     # # # # # # # # # # # # # # # # # # # # 
 
     def avoid_walls(self):
-        turn_factor = 1
+        turn_factor = 2
         had_to_avoid = False
 
         for top_left_xy, width_height in self.wall_coords:
@@ -320,7 +321,7 @@ class Boid:
                 new_pos_y = self.prev_s.y + proposed_rotated_vec[1]
                 new_dir = self.get_dir(proposed_rotated_vec[0], proposed_rotated_vec[1])
                 
-                applied_b1 = State( new_pos_x, new_pos_y, new_dir, proposed_rotated_vec[0], proposed_rotated_vec[1] )
+                applied_b1 = State( new_pos_x, new_pos_y, new_dir, proposed_rotated_vec[0], proposed_rotated_vec[1], b_theta1 )
 
                 self.results[(self.prev_s, b_theta1)] = applied_b1
 
@@ -339,7 +340,7 @@ class Boid:
             new_pos_y2 = self.current_s.y + proposed_rotated_vec2[1]
             new_dir2 = self.get_dir(proposed_rotated_vec2[0], proposed_rotated_vec2[1])
 
-            applied_b2 = State( new_pos_x2, new_pos_y2, new_dir2, proposed_rotated_vec2[0], proposed_rotated_vec2[1] )
+            applied_b2 = State( new_pos_x2, new_pos_y2, new_dir2, proposed_rotated_vec2[0], proposed_rotated_vec2[1], b_theta2 )
             self.results[(self.current_s, b_theta2)] = applied_b2
 
             temp_calc = self.lrta_star_cost(self.current_s, self.results[(self.current_s, b_theta2)], objective_coords, 1)
@@ -351,17 +352,24 @@ class Boid:
                 best_cost2 = temp_calc
                 best_action = b_theta2
 
+        if self.prev_s != None and self.H[self.prev_s][1] > 1:
+            print(f"updated best action from {self.prev_s.action_to} -> {self.current_s.action_to}")
         self.prev_s = self.current_s
 
         # print(f"chosen action -> {best_action}")
 
         return best_action
 
-    def h(self, state_in_question, objective_coords):
+    def h1(self, state_in_question, objective_coords):
         dx = (objective_coords[0] - (state_in_question.x))
         dy = (objective_coords[1] - (state_in_question.y))
         # return math.sqrt( dx**2 + dy**2 )
         return abs(dx) + abs(dy)
+    
+    def h(self, state_in_question, objective_coords):
+        dx = (objective_coords[0] - (state_in_question.x))
+        dy = (objective_coords[1] - (state_in_question.y))
+        return math.sqrt( dx**2 + dy**2 )
 
     def lrta_star_cost(self, s1, s2, objective_coords, which):
         # if the s_prime provided isn't in H yet, return h(s)
@@ -371,8 +379,9 @@ class Boid:
             return self.h(s2, objective_coords)
         else:
             # for now, MAKE ALL ACTION COSTS 1
-            # print(f"{self.H[s2]} <- {s2}")
-            return 1 + self.H[s2][0]
+            if self.H[s2][1] > 0:
+                print(f"{self.H[s2]} <- {s2}")
+            return 20 + self.H[s2][0]
 
 
     # # # # # # # # # # # # # # # # # # # # 
@@ -466,7 +475,7 @@ class Boid:
         self.center_y += self.yvelocity
 
         # a state is defined in multiples of 20 so,
-        self.current_s = State( self.center_x, self.center_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity )
+        self.current_s = State( self.center_x, self.center_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity, lrta_next_act_theta )
 
 
         self.path_pts.append((self.center_x, self.center_y))
