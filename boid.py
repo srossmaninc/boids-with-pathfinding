@@ -20,7 +20,7 @@ https://people.ece.cornell.edu/land/courses/ece4760/labs/s2021/Boids/Boids.html#
 """
 
 class State:
-    nav_mesh_interval = 40
+    nav_mesh_interval = 50
 
     def __init__(self, xcoord, ycoord, direction, xvelocity, yvelocity, action_to ):
         self.x = xcoord
@@ -45,6 +45,9 @@ class State:
         else:
             print("why are you here?")
 
+    def string_stats(self):
+        return f"({self.x_nav}, {self.y_nav})"
+
     def __eq__(self, other):
         return (
             isinstance(other, State) and
@@ -63,6 +66,9 @@ class H_Entry:
     def __init__(self, h_val, counter):
         self.h_val = h_val
         self.counter = counter
+
+    def string_stats(self):
+        return f"{self.h_val} {self.counter}"
 
     def __str__(self):
         return f"{self.h_val} was updated {self.counter} times"
@@ -90,8 +96,8 @@ class Boid:
 
         self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-        self.xvelocity = 3#random.randint(MIN_SPEED, MAX_SPEED) # 5
-        self.yvelocity = 3#random.randint(MIN_SPEED, MAX_SPEED) # 5
+        self.xvelocity = 4#random.randint(MIN_SPEED, MAX_SPEED) # 5
+        self.yvelocity = 4#random.randint(MIN_SPEED, MAX_SPEED) # 5
         self.size = 7
 
         # 'radius' of sensitivty circle
@@ -272,7 +278,7 @@ class Boid:
                 return True
         return False
 
-    def lrta_star_agent(self, objective_coords):
+    def lrta_star_agent(self, objective_coords, num_neighbors):
 
         if (self.current_s.x, self.current_s.y) == objective_coords:
             return ""
@@ -299,7 +305,7 @@ class Boid:
                     visit_penalty = 0
                     if applied_b1 in self.H:
                         # print(f"{self.H[applied_b1].counter}")
-                        visit_penalty = self.H[applied_b1].counter*50
+                        visit_penalty = self.H[applied_b1].counter*50*(num_neighbors+1)
 
                     temp_cost = self.lrta_star_cost(self.results[(self.prev_s, b_theta1)], objective_coords) + visit_penalty
 
@@ -343,12 +349,12 @@ class Boid:
 
         return best_action
 
-    def h1(self, state_in_question, objective_coords):
+    def h(self, state_in_question, objective_coords):
         dx = (objective_coords[0] - (state_in_question.x))
         dy = (objective_coords[1] - (state_in_question.y))
         return abs(dx) + abs(dy)
     
-    def h(self, state_in_question, objective_coords):
+    def h1(self, state_in_question, objective_coords):
         dx = (objective_coords[0] - (state_in_question.x))
         dy = (objective_coords[1] - (state_in_question.y))
         return math.sqrt( dx**2 + dy**2 )
@@ -409,6 +415,9 @@ class Boid:
         had_to_avoid = self.avoid_walls()
         # self.avoid_borders()
 
+        velocity_adjustment_x = 0
+        velocity_adjustment_y = 0
+
 
         if num_neighbhors > 0:
 
@@ -426,19 +435,24 @@ class Boid:
                 match_v_scalar = 0.2
                 diff_vx, diff_vy = self.match_velocity(num_neighbhors, xvelocity_sum=xvelocity_sum, yvelocity_sum=yvelocity_sum)
 
-                self.xvelocity += centering_scalar*diff_x1 + match_v_scalar*diff_vx
-                self.yvelocity += centering_scalar*diff_y1 + match_v_scalar*diff_vy
+                velocity_adjustment_x += centering_scalar*diff_x1 + match_v_scalar*diff_vx
+                velocity_adjustment_y += centering_scalar*diff_y1 + match_v_scalar*diff_vy
                 
 
-        # print(self.h((self.center_x, self.center_y), objective_coords))
         if not had_to_avoid:
-            lrta_next_act_theta = self.lrta_star_agent(objective_coords)
+            lrta_next_act_theta = self.lrta_star_agent(objective_coords, num_neighbhors)
             lrta_scalar = 0.01
+            # if num_neighbhors == 0:
+            #     lrta_scalar = 0.01
+            # else:
+            #     lrta_scalar = 0.005 * num_neighbhors
             self.a = lrta_next_act_theta
-            # print(f"self.a {self.a}")
             res = self.rotate_velocity_2d(self.xvelocity, self.yvelocity, lrta_next_act_theta)
-            self.xvelocity += lrta_scalar*res[0]
-            self.yvelocity += lrta_scalar*res[1]
+            velocity_adjustment_x += lrta_scalar*res[0]
+            velocity_adjustment_y += lrta_scalar*res[1]
+
+        self.xvelocity += velocity_adjustment_x
+        self.yvelocity += velocity_adjustment_y
 
         # collision avoidance
 
@@ -468,10 +482,13 @@ class Boid:
 
         self.path_pts.append((self.center_x, self.center_y))
 
+        # path_to_draw = list(reversed(self.path_pts))[:100]
+        path_to_draw = self.path_pts
+
         if self.check_course_complete(objective_coordx=objective_coords[0], objective_coordy=objective_coords[1]):
-            return None
+            return None, path_to_draw, self.color
         else:
-            return self
+            return self, path_to_draw, self.color
     
     def check_course_complete(self, objective_coordx, objective_coordy):
         # checks if a boid is touching 'end' green circle
@@ -481,7 +498,7 @@ class Boid:
             print(f"boid id={self.boid_id} has completed course in {time.time() - self.start_time}!")
             for k, v in self.H.items():
                 if v.counter > 1:
-                    print(f"state {k} was visited {v} times")
+                    print(f"{k.string_stats()} was visited {v.string_stats()} times")
             return True
         else:
             return False
@@ -511,7 +528,4 @@ class Boid:
         # Translate points to the boid's center
         rotated_points = rotated_points_relative + np.array([self.center_x, self.center_y])
 
-        # path_to_draw = list(reversed(self.path_pts))[:100]
-        path_to_draw = self.path_pts
-
-        return rotated_points.tolist(), self.center_x, self.center_y, self.sense_radius, self.color, path_to_draw
+        return rotated_points.tolist(), self.center_x, self.center_y, self.sense_radius
