@@ -7,7 +7,6 @@ pygame.init()
 
 # Set up display
 ACTUAL_WIDTH, ACTUAL_HEIGHT = 1280, 720
-# ACTUAL_WIDTH, ACTUAL_HEIGHT = 1920, 1080
 screen = pygame.display.set_mode((ACTUAL_WIDTH, ACTUAL_HEIGHT))
 pygame.display.set_caption("Boids")
 
@@ -51,8 +50,6 @@ def update_surface():
                 pygame.draw.lines(surface=surface, color=path_color, closed=False, points=list(reversed(path_to_draw)))
                 pygame.draw.polygon(surface, (255, 255, 0), rotated_points)
                 #####
-
-    # boids = new_boids
 
     return surface, new_boids
 
@@ -114,13 +111,6 @@ if __name__ == '__main__':
 
 
     original_num_boids = len(boids)
-    # curr_id += 1
-    # boids.append(Boid(150, 100, 2, wall_coords=map_boxes))
-    # boids.append(Boid(180, 130, 3, wall_coords=map_boxes))
-    # boids.append(Boid(170, 70, 4, wall_coords=map_boxes))
-
-    # boids.append(Boid(225, 150, 5, wall_coords=map_boxes))
-    # boids.append(Boid(125, 90, 6, wall_coords=map_boxes))
 
     # Game loop
     running = True
@@ -141,14 +131,7 @@ if __name__ == '__main__':
                     pty = random.randint(70, 100)
                     boids.append(Boid(ptx, pty, boid_id=curr_id, wall_coords=map_boxes))
                     curr_id += 1
-            # elif event.type == pygame.MOUSEBUTTONDOWN:
-            #     stopped = True
 
-            # if not stopped:
-            #     surface, new_boids = update_surface()
-            #     boids = new_boids
-
-        # surface, new_boids = update_surface()
         surface = None
         match update_surface():
             case (surface, None):

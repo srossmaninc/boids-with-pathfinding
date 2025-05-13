@@ -79,9 +79,7 @@ class Boid:
     xvelocity = 0
     yvelocity = 0
 
-    # Per the paper,
-    #   random heading
-    #   random velocity
+
     def __init__(self, init_x, init_y, boid_id, wall_coords):
         print(f"spawning boid id={boid_id}...")
         self.start_time = time.time()
@@ -143,7 +141,6 @@ class Boid:
         y_accumulate = 0
 
         for (x, y), (w, h) in self.wall_coords:
-            # print(f"top_left = {top_left}, bottom_right = {bottom_right}")
             horizontal_span = (x, x + w)
             vertical_span = (y, y + h)
 
@@ -170,35 +167,6 @@ class Boid:
         self.yvelocity += y_accumulate
         return had_to_avoid
     
-    def avoid_borders(self):
-
-        wall_distance = 80
-        turn_factor = 0.5
-
-        # issue with boid going directly straight vertical or horizontal
-        if self.yvelocity == 0:
-            self.yvelocity -= 1
-        if self.xvelocity == 0:
-            self.xvelocity += 1
-
-        # left wall
-        if self.center_x - wall_distance < 0:
-            # rotated 'up' or flat
-            self.xvelocity += turn_factor
-
-        # right wall
-        if self.center_x + wall_distance >= WIDTH:
-            self.xvelocity -= turn_factor
-
-        # top
-        if self.center_y + wall_distance >= HEIGHT:
-            self.yvelocity -= turn_factor
-
-        # bottom
-        if self.center_y - wall_distance < 0:
-            self.yvelocity += turn_factor
-
-        return True
     
     def collision_avoidance(self, neighborhood):
         bump_dist = 20
@@ -232,8 +200,6 @@ class Boid:
 
         diff_x = center_flock_x - self.center_x
         diff_y = center_flock_y - self.center_y
-        # print(f"curr_heading_relative={center_heading_relative} boid_heading={self.heading}")
-        # print(f"diff_x {diff_x} diff_y {diff_y}")
 
         return diff_x, diff_y
 
@@ -250,7 +216,7 @@ class Boid:
     # GET DIRECTION FROM VELOCITIES
     # # # # # # # # # # # # # # # # # # # # 
     def get_dir(self, xv, yv, num_directions=6):
-        angle = math.atan2(yv, xv)  # returns radians between -π and π
+        angle = math.atan2(yv, xv)
         angle_deg = (math.degrees(angle) + 360) % 360  # normalize to [0, 360)
 
         bucket_size = 360 / num_directions
@@ -304,7 +270,6 @@ class Boid:
 
                     visit_penalty = 0
                     if applied_b1 in self.H:
-                        # print(f"{self.H[applied_b1].counter}")
                         visit_penalty = self.H[applied_b1].counter*50*(num_neighbors+1)
 
                     temp_cost = self.lrta_star_cost(self.results[(self.prev_s, b_theta1)], objective_coords) + visit_penalty
@@ -332,7 +297,6 @@ class Boid:
                 temp_calc = self.lrta_star_cost(self.results[(self.current_s, b_theta2)], objective_coords)
 
                 if temp_calc == best_cost2:
-                    # print(f"tie at action {best_action} and {b_theta2}")
                     if best_action == self.current_s.action_to:
                         best_action = b_theta2
 
@@ -342,9 +306,7 @@ class Boid:
 
         self.prev_s = self.current_s
 
-        # print(f"best action -> {best_action}")
         if best_action == None:
-            # print("HERE!")
             best_action = 180
 
         return best_action
@@ -364,7 +326,6 @@ class Boid:
         # if the s_prime provided isn't in H yet, return h(s)
         if s2 not in self.H:
             # euclidean distance
-            # print(f"not in H -> {s2}")
             return self.h(s2, objective_coords)
         else:
             return 1 + self.H[s2].h_val
@@ -413,7 +374,6 @@ class Boid:
 
         # wall avoidance
         had_to_avoid = self.avoid_walls()
-        # self.avoid_borders()
 
         velocity_adjustment_x = 0
         velocity_adjustment_y = 0
@@ -475,9 +435,6 @@ class Boid:
         if not had_to_avoid:
             # a state is defined in multiples of 20 so,
             self.current_s = State( self.center_x, self.center_y, self.get_dir(self.xvelocity, self.yvelocity), self.xvelocity, self.yvelocity, lrta_next_act_theta )
-
-        # if had_to_avoid:
-        #     self.H[self.prev_s].h_val = 100
 
 
         self.path_pts.append((self.center_x, self.center_y))
