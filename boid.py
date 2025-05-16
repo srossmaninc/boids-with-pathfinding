@@ -243,6 +243,29 @@ class Boid:
             if applied_s.x >= horizontal_span[0] and applied_s.x <= horizontal_span[1] and applied_s.y >= vertical_span[0] and applied_s.y <= vertical_span[1]:
                 return True
         return False
+    
+    # 'prev_update' parameter is for distinguishing between first and second lrta* loop
+    def lrta_action_cost_estimate_applied(self, s1: State, action: int, prev_update: bool, num_neighbors: int, objective_coords: tuple[int, int]):
+        proposed_rotated_vec = self.rotate_velocity_2d(s1.xvelocity, s1.yvelocity, action)
+        new_pos_x = s1.x + proposed_rotated_vec[0]
+        new_pos_y = s1.y + proposed_rotated_vec[1]
+        new_dir = self.get_dir(proposed_rotated_vec[0], proposed_rotated_vec[1])
+        
+        applied_a_state = State( new_pos_x, new_pos_y, new_dir, proposed_rotated_vec[0], proposed_rotated_vec[1], action )
+        if not self.lrta_wall_check(applied_a_state):
+
+            self.results[(s1, action)] = applied_a_state
+
+            
+            visit_penalty = 0
+
+            if prev_update:
+                if applied_a_state in self.H:
+                    visit_penalty = self.H[applied_a_state].counter*50*(num_neighbors+1)
+
+            return self.lrta_star_cost(self.results[(s1, action)], objective_coords) + visit_penalty
+        return float('inf')
+        
 
     def lrta_star_agent(self, objective_coords, num_neighbors):
 
@@ -256,67 +279,42 @@ class Boid:
         if self.prev_s != None:
             self.results[(self.prev_s, self.a)] = self.current_s
 
-            best_cost = float('inf')
-            for b_theta1 in self.actions:
-                proposed_rotated_vec = self.rotate_velocity_2d(self.prev_s.xvelocity, self.prev_s.yvelocity, b_theta1)
-                new_pos_x = self.prev_s.x + proposed_rotated_vec[0]
-                new_pos_y = self.prev_s.y + proposed_rotated_vec[1]
-                new_dir = self.get_dir(proposed_rotated_vec[0], proposed_rotated_vec[1])
-                
-                applied_b1 = State( new_pos_x, new_pos_y, new_dir, proposed_rotated_vec[0], proposed_rotated_vec[1], b_theta1 )
-                if not self.lrta_wall_check(applied_b1):
+            best_cost_list = map(lambda act: self.lrta_action_cost_estimate_applied(
+                s1=self.prev_s,
+                action=act,
+                prev_update=True,
+                num_neighbors=num_neighbors,
+                objective_coords=objective_coords
+            ), self.actions)
 
-                    self.results[(self.prev_s, b_theta1)] = applied_b1
-
-                    visit_penalty = 0
-                    if applied_b1 in self.H:
-                        visit_penalty = self.H[applied_b1].counter*50*(num_neighbors+1)
-
-                    temp_cost = self.lrta_star_cost(self.results[(self.prev_s, b_theta1)], objective_coords) + visit_penalty
-
-                    if temp_cost < best_cost:
-                        best_cost = temp_cost
-            self.H[self.prev_s].h_val = best_cost
+            self.H[self.prev_s].h_val = min(best_cost_list)
             self.H[self.prev_s].counter += 1
 
-        best_cost2 = float('inf')
-        best_action = None
         # stuff with s'' (next state)
-        for b_theta2 in self.actions:
-            proposed_rotated_vec2 = self.rotate_velocity_2d(self.current_s.xvelocity, self.current_s.yvelocity, b_theta2)
-            new_pos_x2 = self.current_s.x + proposed_rotated_vec2[0]
-            new_pos_y2 = self.current_s.y + proposed_rotated_vec2[1]
-            new_dir2 = self.get_dir(proposed_rotated_vec2[0], proposed_rotated_vec2[1])
 
-            applied_b2 = State( new_pos_x2, new_pos_y2, new_dir2, proposed_rotated_vec2[0], proposed_rotated_vec2[1], b_theta2 )
+        best_cost_act_list = map(lambda act: (self.lrta_action_cost_estimate_applied(
+            s1=self.current_s,
+            action=act,
+            prev_update=False,
+            num_neighbors=num_neighbors,
+            objective_coords=objective_coords
+        ), act), self.actions)
 
-            if not self.lrta_wall_check(applied_b2):
-
-                self.results[(self.current_s, b_theta2)] = applied_b2
-
-                temp_calc = self.lrta_star_cost(self.results[(self.current_s, b_theta2)], objective_coords)
-
-                if temp_calc == best_cost2:
-                    if best_action == self.current_s.action_to:
-                        best_action = b_theta2
-
-                if temp_calc < best_cost2:
-                    best_cost2 = temp_calc
-                    best_action = b_theta2
+        curr_best_action = min(best_cost_act_list, key=lambda tup: tup[0])[1]
 
         self.prev_s = self.current_s
 
-        if best_action == None:
-            best_action = 180
+        if curr_best_action == None:
+            curr_best_action = 180
 
-        return best_action
+        return curr_best_action
 
-    def h(self, state_in_question, objective_coords):
+    def h1(self, state_in_question, objective_coords):
         dx = (objective_coords[0] - (state_in_question.x))
         dy = (objective_coords[1] - (state_in_question.y))
         return abs(dx) + abs(dy)
     
-    def h1(self, state_in_question, objective_coords):
+    def h(self, state_in_question, objective_coords):
         dx = (objective_coords[0] - (state_in_question.x))
         dy = (objective_coords[1] - (state_in_question.y))
         return math.sqrt( dx**2 + dy**2 )

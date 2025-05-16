@@ -82,8 +82,8 @@ if __name__ == '__main__':
     map_boxes.append( (map_top_right, (52, HEIGHT + 100)) )
 
     RUN_3 = not True
-    RUN_6 = not True
-    RUN_9 = True
+    RUN_6 = True
+    RUN_9 = not True
 
     if RUN_3:
         boids.append( create_boid(100, 100) )
